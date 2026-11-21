@@ -4,10 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Chronos: Earth 300,000 BCE</title>
+  <!-- PixiJS WebGL Engine via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.2/pixi.min.js"></script>
   <style>
     :root {
-      --bg: #050811;
-      --panel: rgba(15, 23, 42, 0.85);
+      --bg: #030712;
+      --panel: rgba(15, 23, 42, 0.88);
       --border: #334155;
       --accent: #38bdf8;
       --gold: #fbbf24;
@@ -17,24 +19,25 @@
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
       overflow: hidden;
       width: 100vw;
       height: 100vh;
     }
 
-    #gameCanvas {
+    #canvas-container {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      image-rendering: pixelated;
+      inset: 0;
       cursor: grab;
     }
-    #gameCanvas:active { cursor: grabbing; }
+    #canvas-container:active { cursor: grabbing; }
 
-    /* Top HUD */
+    /* HUD */
+    .ui-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
     .top-hud {
       position: absolute;
       top: 16px;
@@ -42,371 +45,467 @@
       right: 20px;
       display: flex;
       justify-content: space-between;
-      pointer-events: none;
+      gap: 12px;
     }
     .hud-card {
       background: var(--panel);
-      backdrop-filter: blur(8px);
+      backdrop-filter: blur(10px);
       border: 1px solid var(--border);
-      padding: 12px 18px;
-      border-radius: 8px;
+      padding: 12px 20px;
+      border-radius: 10px;
       pointer-events: auto;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
     }
     .era-badge {
-      font-size: 0.85rem;
+      font-size: 0.75rem;
+      letter-spacing: 1.5px;
       text-transform: uppercase;
-      letter-spacing: 1px;
       color: var(--accent);
       font-weight: 700;
     }
-    .year-display { font-size: 1.5rem; font-weight: 800; font-family: monospace; }
+    .year-display { font-size: 1.6rem; font-weight: 800; }
 
-    /* Start Overlay */
-    #start-overlay {
+    /* Bottom Timeline */
+    .bottom-bar {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      right: 20px;
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: auto;
+    }
+    .timeline-info { display: flex; flex-direction: column; gap: 4px; }
+    .controls-hint { font-size: 0.8rem; color: #94a3b8; }
+    .btn-action {
+      background: #0284c7;
+      color: white;
+      border: none;
+      padding: 10px 22px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-action:hover { background: #0369a1; }
+
+    /* Intro Overlay */
+    #intro-modal {
       position: absolute;
       inset: 0;
-      background: rgba(5, 8, 17, 0.7);
+      background: rgba(3, 7, 18, 0.85);
+      backdrop-filter: blur(8px);
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
-      z-index: 50;
-      backdrop-filter: blur(4px);
-      transition: opacity 0.8s ease;
+      z-index: 100;
+      transition: opacity 0.6s ease;
+      text-align: center;
+      padding: 20px;
     }
-    #start-overlay h1 { font-size: 3rem; margin-bottom: 8px; letter-spacing: 2px; }
-    #start-overlay p { color: #94a3b8; margin-bottom: 24px; font-size: 1.1rem; }
+    #intro-modal h1 {
+      font-size: 3.5rem;
+      letter-spacing: 4px;
+      margin-bottom: 8px;
+      text-shadow: 0 0 30px rgba(56, 189, 248, 0.4);
+    }
+    #intro-modal p { color: #94a3b8; max-width: 500px; line-height: 1.6; margin-bottom: 24px; }
     .btn-start {
       background: var(--accent);
-      color: #04101e;
+      color: #030712;
       border: none;
-      padding: 14px 36px;
+      padding: 14px 38px;
       font-size: 1.1rem;
-      font-weight: 700;
+      font-weight: 800;
       border-radius: 8px;
       cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 0 25px rgba(56, 189, 248, 0.5);
+      transition: transform 0.2s;
     }
-    .btn-start:hover { transform: scale(1.05); box-shadow: 0 0 20px rgba(56, 189, 248, 0.5); }
-
-    /* Bottom Timeline Bar */
-    .bottom-bar {
-      position: absolute;
-      bottom: 16px;
-      left: 20px;
-      right: 20px;
-      background: var(--panel);
-      backdrop-filter: blur(10px);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 16px 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      z-index: 10;
-    }
-    .timeline-track {
-      width: 100%;
-      height: 8px;
-      background: #1e293b;
-      border-radius: 4px;
-      position: relative;
-    }
-    .timeline-progress {
-      width: 2%;
-      height: 100%;
-      background: var(--accent);
-      border-radius: 4px;
-      transition: width 0.3s;
-    }
-    .timeline-controls {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .milestones {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      font-size: 0.9rem;
-    }
-    .milestone-tag {
-      background: #1e293b;
-      padding: 6px 12px;
-      border-radius: 6px;
-      border: 1px solid #334155;
-      color: #cbd5e1;
-    }
-    .milestone-tag.done {
-      border-color: var(--gold);
-      color: var(--gold);
-      background: rgba(251, 191, 36, 0.1);
-    }
-    .btn-leap {
-      background: #1e293b;
-      color: #64748b;
-      border: 1px solid #334155;
-      padding: 10px 20px;
-      border-radius: 8px;
-      font-weight: 700;
-      cursor: not-allowed;
-      transition: all 0.3s;
-    }
-    .btn-leap.active {
-      background: var(--gold);
-      color: #000;
-      border-color: var(--gold);
-      cursor: pointer;
-      box-shadow: 0 0 15px rgba(251, 191, 36, 0.4);
-    }
+    .btn-start:hover { transform: scale(1.05); }
   </style>
 </head>
 <body>
 
-  <canvas id="gameCanvas"></canvas>
+  <div id="canvas-container"></div>
 
-  <!-- Start Intro Screen -->
-  <div id="start-overlay">
-    <h1>CHRONOS</h1>
-    <p>A living 8-bit simulation of Earth's entire history</p>
-    <button class="btn-start" onclick="startGame()">ENTER 300,000 BCE</button>
-  </div>
-
-  <!-- Top HUD -->
-  <div class="top-hud">
-    <div class="hud-card">
-      <div class="era-badge" id="era-label">Paleolithic Dawn</div>
-      <div class="year-display" id="year-label">300,000 BCE</div>
-    </div>
-    <div class="hud-card">
-      <div>🌍 Global Population: <strong id="pop-label">1,200</strong></div>
-      <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 4px;">Zoom: <span id="zoom-label">1.0x</span></div>
-    </div>
-  </div>
-
-  <!-- Bottom Timeline & Controls -->
-  <div class="bottom-bar">
-    <div class="timeline-track">
-      <div class="timeline-progress" id="time-prog"></div>
-    </div>
-    <div class="timeline-controls">
-      <div class="milestones">
-        <span>Era Goals:</span>
-        <span class="milestone-tag done" id="m1">🔥 Master Fire</span>
-        <span class="milestone-tag" id="m2" onclick="completeMilestone()">🦴 Form First Clan (Click to complete)</span>
+  <div class="ui-layer">
+    <!-- Top HUD -->
+    <div class="top-hud">
+      <div class="hud-card">
+        <div class="era-badge">PALEOLITHIC DAWN</div>
+        <div class="year-display">300,000 BCE</div>
       </div>
-      <button class="btn-leap" id="leap-btn" onclick="leapEra()">⚡ SKIP TO NEXT ERA</button>
+      <div class="hud-card" style="text-align: right;">
+        <div style="font-size: 0.85rem; color: #94a3b8;">FOCUSED REGION</div>
+        <div style="font-weight: 700; color: #f8fafc;" id="region-label">Great Rift Valley, Africa</div>
+        <div style="font-size: 0.8rem; color: var(--gold); margin-top: 4px;">Zoom: <span id="zoom-text">1.0x</span></div>
+      </div>
+    </div>
+
+    <!-- Bottom Timeline -->
+    <div class="bottom-bar">
+      <div class="timeline-info">
+        <div>🌍 Global Hominid Population: <strong>~1,500</strong></div>
+        <div class="controls-hint">🖱️ Scroll wheel to zoom in/out • Drag to pan Earth</div>
+      </div>
+      <button class="btn-action" onclick="focusOnCamp()">📍 Focus on Camp</button>
+    </div>
+
+    <!-- Start Overlay -->
+    <div id="intro-modal">
+      <h1>CHRONOS</h1>
+      <p>A living 8-bit simulation of Earth's true geography. You begin at the dawn of Homo sapiens in East Africa.</p>
+      <button class="btn-start" onclick="beginSimulation()">ENTER 300,000 BCE</button>
     </div>
   </div>
 
   <script>
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
+    // 1. Initialize PixiJS WebGL Renderer
+    PIXI.BaseTexture.defaultOptions.scaleMode = PIXI.SCALE_MODES.NEAREST; // Keeps pixel art ultra-crisp
 
-    // Screen dimensions
-    function resize() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    }
-    window.addEventListener('resize', resize);
-    resize();
+    const app = new PIXI.Application({
+      resizeTo: window,
+      backgroundColor: 0x030712,
+      antialias: false,
+      resolution: window.devicePixelRatio || 1,
+      autoDensity: true
+    });
+    document.getElementById('canvas-container').appendChild(app.view);
 
-    // Map Dimensions (Retro Pixel Earth World Size)
-    const WORLD_W = 1200;
-    const WORLD_H = 650;
+    // World Dimensions (2048 x 1024 Equirectangular Earth)
+    const MAP_WIDTH = 2048;
+    const MAP_HEIGHT = 1024;
 
-    // Camera State
-    // East Africa coordinate inside this world: x ~ 620, y ~ 360
-    let camera = {
-      x: WORLD_W / 2,
-      y: WORLD_H / 2,
-      zoom: 0.85,
-      targetX: WORLD_W / 2,
-      targetY: WORLD_H / 2,
-      targetZoom: 0.85
+    // Real Geographic Coordinate for East African Rift Valley
+    // Longitude ~36°E, Latitude ~-3°S
+    const CAMP_POS = {
+      x: Math.round(((36 + 180) / 360) * MAP_WIDTH),     // ~1229 px
+      y: Math.round(((90 - (-3)) / 180) * MAP_HEIGHT)    // ~529 px
     };
 
+    // Root World Container for Panning & Zooming
+    const world = new PIXI.Container();
+    app.stage.addChild(world);
+
+    // Sub-containers for Layers
+    const mapLayer = new PIXI.Container();
+    const foliageLayer = new PIXI.Container();
+    const entitiesLayer = new PIXI.Container();
+    const fxLayer = new PIXI.Container();
+    const beaconLayer = new PIXI.Container();
+
+    world.addChild(mapLayer, foliageLayer, entitiesLayer, fxLayer, beaconLayer);
+
+    // 2. Procedural Pixel Texture Generators (Zero Broken Links)
+    function createPixelTexture(w, h, drawFn) {
+      const c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      drawFn(ctx);
+      return PIXI.Texture.from(c);
+    }
+
+    // 16x16 Prehistoric Human Sprite
+    const humanTexture = createPixelTexture(16, 16, ctx => {
+      // Body / Leather pelt
+      ctx.fillStyle = '#b45309';
+      ctx.fillRect(5, 5, 6, 6);
+      // Skin head
+      ctx.fillStyle = '#d97706';
+      ctx.fillRect(6, 2, 4, 4);
+      // Hair
+      ctx.fillStyle = '#1c1917';
+      ctx.fillRect(6, 1, 4, 2);
+      // Legs
+      ctx.fillStyle = '#92400e';
+      ctx.fillRect(5, 11, 2, 4);
+      ctx.fillRect(9, 11, 2, 4);
+      // Spear (Shaft & Flint tip)
+      ctx.fillStyle = '#78350f';
+      ctx.fillRect(12, 1, 1, 14);
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(11, 0, 3, 2);
+    });
+
+    // 24x24 Pixel Savanna Acacia Tree
+    const treeTexture = createPixelTexture(24, 24, ctx => {
+      // Trunk & Branches
+      ctx.fillStyle = '#451a03';
+      ctx.fillRect(11, 12, 2, 10);
+      ctx.fillRect(9, 10, 3, 2);
+      ctx.fillRect(12, 9, 4, 2);
+      // Flat Savanna Canopy (Umbrella-shaped)
+      ctx.fillStyle = '#15803d';
+      ctx.fillRect(4, 5, 16, 4);
+      ctx.fillRect(2, 6, 20, 2);
+      // Highlights
+      ctx.fillStyle = '#4ade80';
+      ctx.fillRect(5, 5, 6, 1);
+      ctx.fillRect(13, 5, 5, 1);
+    });
+
+    // 10x8 Gazelle/Animal Sprite
+    const animalTexture = createPixelTexture(10, 8, ctx => {
+      ctx.fillStyle = '#d97706';
+      ctx.fillRect(2, 2, 6, 3); // Body
+      ctx.fillRect(7, 0, 2, 3); // Neck/Head
+      // Legs
+      ctx.fillStyle = '#78350f';
+      ctx.fillRect(2, 5, 1, 3);
+      ctx.fillRect(7, 5, 1, 3);
+    });
+
+    // 3. Load the Real 2048x1024 Earth Map
+    // Uses Three.js CDN planet texture (fast, CORS-enabled, reliable)
+    const earthMapUrl = 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/textures/planets/earth_atmos_2048.jpg';
+    
+    // Instant fallback map while satellite loads
+    const fallbackCanvas = document.createElement('canvas');
+    fallbackCanvas.width = MAP_WIDTH;
+    fallbackCanvas.height = MAP_HEIGHT;
+    const fctx = fallbackCanvas.getContext('2d');
+    fctx.fillStyle = '#0f172a'; // Deep ocean
+    fctx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+    const mapSprite = new PIXI.Sprite(PIXI.Texture.from(fallbackCanvas));
+    mapSprite.width = MAP_WIDTH;
+    mapSprite.height = MAP_HEIGHT;
+    mapLayer.addChild(mapSprite);
+
+    // Stream in the actual high-res Earth texture
+    PIXI.Assets.load(earthMapUrl).then(tex => {
+      tex.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
+      mapSprite.texture = tex;
+    }).catch(() => console.log("Using procedural baseline."));
+
+    // 4. Populate East Africa Camp
+    // Campfire
+    const fireGraphic = new PIXI.Graphics();
+    fxLayer.addChild(fireGraphic);
+
+    // Smoke Particles
+    const smokeParticles = [];
+    for (let i = 0; i < 15; i++) {
+      const p = new PIXI.Graphics();
+      p.beginFill(0x94a3b8, 0.6);
+      p.drawCircle(0, 0, 1.5);
+      p.endFill();
+      p.x = CAMP_POS.x;
+      p.y = CAMP_POS.y - 4;
+      p.vy = -0.3 - Math.random() * 0.4;
+      p.vx = (Math.random() - 0.5) * 0.2;
+      p.alpha = Math.random();
+      smokeParticles.push(p);
+      fxLayer.addChild(p);
+    }
+
+    // Humans
+    const humans = [];
+    for (let i = 0; i < 12; i++) {
+      const s = new PIXI.Sprite(humanTexture);
+      s.anchor.set(0.5, 0.8);
+      s.x = CAMP_POS.x + (Math.random() * 60 - 30);
+      s.y = CAMP_POS.y + (Math.random() * 50 - 25);
+      s.vx = (Math.random() - 0.5) * 0.3;
+      s.vy = (Math.random() - 0.5) * 0.3;
+      entitiesLayer.addChild(s);
+      humans.push(s);
+    }
+
+    // Savanna Acacia Trees & Rocks
+    for (let i = 0; i < 45; i++) {
+      const tree = new PIXI.Sprite(treeTexture);
+      tree.anchor.set(0.5, 1);
+      // Scatter in surrounding savanna
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 30 + Math.random() * 120;
+      tree.x = CAMP_POS.x + Math.cos(angle) * dist;
+      tree.y = CAMP_POS.y + Math.sin(angle) * dist;
+      foliageLayer.addChild(tree);
+    }
+
+    // Gazelle Wildlife
+    const animals = [];
+    for (let i = 0; i < 8; i++) {
+      const a = new PIXI.Sprite(animalTexture);
+      a.anchor.set(0.5, 0.8);
+      a.x = CAMP_POS.x + 80 + Math.random() * 80;
+      a.y = CAMP_POS.y - 40 + Math.random() * 80;
+      a.vx = (Math.random() - 0.5) * 0.2;
+      a.vy = (Math.random() - 0.5) * 0.2;
+      entitiesLayer.addChild(a);
+      animals.push(a);
+    }
+
+    // Global Orbit Beacon (Visible only when zoomed out)
+    const beacon = new PIXI.Graphics();
+    beaconLayer.addChild(beacon);
+
+    // 5. Camera & Navigation
+    let camera = {
+      x: window.innerWidth / 2 - (CAMP_POS.x * 0.8),
+      y: window.innerHeight / 2 - (CAMP_POS.y * 0.8),
+      scale: 0.8,
+      targetX: 0,
+      targetY: 0,
+      targetScale: 0.8,
+      isLerping: false
+    };
+
+    // Center world initially
+    world.x = (window.innerWidth - MAP_WIDTH * 0.8) / 2;
+    world.y = (window.innerHeight - MAP_HEIGHT * 0.8) / 2;
+    world.scale.set(0.8);
+
+    // Pan Handlers
     let isDragging = false;
     let dragStart = { x: 0, y: 0 };
-    let gameStarted = false;
+    let worldStart = { x: 0, y: 0 };
 
-    // Simple pixelated Earth world map matrix
-    // We generate a retro landmass buffer
-    const mapCanvas = document.createElement('canvas');
-    mapCanvas.width = WORLD_W;
-    mapCanvas.height = WORLD_H;
-    const mapCtx = mapCanvas.getContext('2d');
-
-    function generatePixelEarth() {
-      // 1. Deep Ocean
-      mapCtx.fillStyle = '#1e3a8a';
-      mapCtx.fillRect(0, 0, WORLD_W, WORLD_H);
-
-      // Rough blocky continents for retro feel
-      mapCtx.fillStyle = '#15803d'; // Forest/Grass
-
-      // Africa
-      mapCtx.fillRect(560, 240, 110, 190);
-      mapCtx.fillRect(590, 430, 60, 80);
-      // Sahara (Desert)
-      mapCtx.fillStyle = '#ca8a04';
-      mapCtx.fillRect(550, 240, 140, 60);
-
-      // Eurasia
-      mapCtx.fillStyle = '#15803d';
-      mapCtx.fillRect(520, 130, 360, 100);
-      mapCtx.fillRect(720, 200, 160, 100);
-
-      // Americas
-      mapCtx.fillRect(220, 140, 120, 140);
-      mapCtx.fillRect(280, 290, 80, 170);
-
-      // Ice Caps
-      mapCtx.fillStyle = '#e0f2fe';
-      mapCtx.fillRect(0, 0, WORLD_W, 30);
-      mapCtx.fillRect(0, WORLD_H - 40, WORLD_W, 40);
-    }
-    generatePixelEarth();
-
-    // The Little Humans in East Africa (300,000 BCE)
-    const humans = [];
-    const EAST_AFRICA = { x: 630, y: 370 };
-
-    for (let i = 0; i < 25; i++) {
-      humans.push({
-        x: EAST_AFRICA.x + (Math.random() * 40 - 20),
-        y: EAST_AFRICA.y + (Math.random() * 40 - 20),
-        vx: (Math.random() - 0.5) * 0.4,
-        vy: (Math.random() - 0.5) * 0.4,
-        color: i % 2 === 0 ? '#d97706' : '#92400e' // Leather / pelt colors
-      });
-    }
-
-    // Input Handlers
-    window.addEventListener('mousedown', e => {
-      if (e.clientY > window.innerHeight - 100) return; // Ignore clicks near timeline
+    window.addEventListener('pointerdown', e => {
+      if (e.target.closest('.ui-layer') || e.clientY > window.innerHeight - 80) return;
       isDragging = true;
+      camera.isLerping = false;
       dragStart = { x: e.clientX, y: e.clientY };
+      worldStart = { x: world.x, y: world.y };
     });
 
-    window.addEventListener('mousemove', e => {
+    window.addEventListener('pointermove', e => {
       if (!isDragging) return;
-      const dx = (e.clientX - dragStart.x) / camera.zoom;
-      const dy = (e.clientY - dragStart.y) / camera.zoom;
-      camera.x -= dx;
-      camera.y -= dy;
-      camera.targetX = camera.x;
-      camera.targetY = camera.y;
-      dragStart = { x: e.clientX, y: e.clientY };
+      world.x = worldStart.x + (e.clientX - dragStart.x);
+      world.y = worldStart.y + (e.clientY - dragStart.y);
     });
 
-    window.addEventListener('mouseup', () => isDragging = false);
+    window.addEventListener('pointerup', () => isDragging = false);
 
+    // Smooth Google-Earth Style Zoom-to-Cursor
     window.addEventListener('wheel', e => {
-      const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
-      camera.targetZoom = Math.min(Math.max(camera.targetZoom * zoomFactor, 0.7), 12.0);
-    });
+      e.preventDefault();
+      camera.isLerping = false;
 
-    // Start Game Cinematic Zoom
-    function startGame() {
-      document.getElementById('start-overlay').style.opacity = '0';
-      setTimeout(() => document.getElementById('start-overlay').style.display = 'none', 800);
+      const zoomFactor = e.deltaY < 0 ? 1.25 : 0.8;
+      const newScale = Math.min(Math.max(world.scale.x * zoomFactor, 0.5), 32.0);
 
-      // Fly camera into East Africa
-      camera.targetX = EAST_AFRICA.x;
-      camera.targetY = EAST_AFRICA.y;
-      camera.targetZoom = 6.5; // Zoom right down to ground level
-      gameStarted = true;
+      const mouseX = e.clientX;
+      const mouseY = e.clientY;
+
+      const worldPos = {
+        x: (mouseX - world.x) / world.scale.x,
+        y: (mouseY - world.y) / world.scale.y
+      };
+
+      world.scale.set(newScale);
+      world.x = mouseX - worldPos.x * newScale;
+      world.y = mouseY - worldPos.y * newScale;
+
+      document.getElementById('zoom-text').innerText = newScale.toFixed(1) + 'x';
+    }, { passive: false });
+
+    // Camera Focus Helper
+    function focusOnCamp(targetZoom = 18.0) {
+      camera.isLerping = true;
+      camera.targetScale = targetZoom;
+      camera.targetX = window.innerWidth / 2 - (CAMP_POS.x * targetZoom);
+      camera.targetY = window.innerHeight / 2 - (CAMP_POS.y * targetZoom);
     }
 
-    // Milestone Completion
-    let milestoneDone = false;
-    function completeMilestone() {
-      milestoneDone = true;
-      const m2 = document.getElementById('m2');
-      m2.classList.add('done');
-      m2.innerText = "🦴 Formed First Clan ✓";
-
-      const leapBtn = document.getElementById('leap-btn');
-      leapBtn.classList.add('active');
+    function beginSimulation() {
+      const modal = document.getElementById('intro-modal');
+      modal.style.opacity = '0';
+      setTimeout(() => modal.style.display = 'none', 600);
+      focusOnCamp(16.0); // Smooth dive from orbit into Rift Valley
     }
 
-    function leapEra() {
-      if (!milestoneDone) return;
-      alert("⚡ CHRONOS LEAP! Time jumps ahead 100,000 years into the Out-of-Africa Migration era!");
-      document.getElementById('year-label').innerText = "200,000 BCE";
-      document.getElementById('era-label').innerText = "The Great Migration";
-      document.getElementById('time-prog').style.width = "10%";
-    }
+    // 6. Game Render Loop
+    let ticker = 0;
+    app.ticker.add(() => {
+      ticker += 0.05;
 
-    // Game Loop
-    function update() {
-      // Smooth camera interpolation (LERP)
-      camera.x += (camera.targetX - camera.x) * 0.05;
-      camera.y += (camera.targetY - camera.y) * 0.05;
-      camera.zoom += (camera.targetZoom - camera.zoom) * 0.05;
+      // Handle Smooth Camera Fly-To (LERP)
+      if (camera.isLerping) {
+        world.x += (camera.targetX - world.x) * 0.06;
+        world.y += (camera.targetY - world.y) * 0.06;
+        const currentScale = world.scale.x;
+        const nextScale = currentScale + (camera.targetScale - currentScale) * 0.06;
+        world.scale.set(nextScale);
+        document.getElementById('zoom-text').innerText = nextScale.toFixed(1) + 'x';
 
-      document.getElementById('zoom-label').innerText = camera.zoom.toFixed(1) + 'x';
+        if (Math.abs(camera.targetScale - nextScale) < 0.01) {
+          camera.isLerping = false;
+        }
+      }
 
-      // Update wander of the first humans
-      if (gameStarted) {
+      const currentZoom = world.scale.x;
+
+      // LOD SWITCHING:
+      // When far away, hide tiny foliage/people and show glowing orbit beacon
+      const showMicroDetail = currentZoom >= 3.5;
+      foliageLayer.visible = showMicroDetail;
+      entitiesLayer.visible = showMicroDetail;
+      fxLayer.visible = showMicroDetail;
+
+      // Draw Orbit Beacon when zoomed out
+      beacon.clear();
+      if (!showMicroDetail) {
+        const pulse = Math.sin(ticker * 2) * 2;
+        beacon.beginFill(0xfbbf24, 0.4);
+        beacon.drawCircle(CAMP_POS.x, CAMP_POS.y, 8 + pulse);
+        beacon.beginFill(0x38bdf8, 1);
+        beacon.drawCircle(CAMP_POS.x, CAMP_POS.y, 3);
+        beacon.endFill();
+      }
+
+      // Micro Detail Animations (Only compute when zoomed in)
+      if (showMicroDetail) {
+        // Campfire Flicker
+        fireGraphic.clear();
+        fireGraphic.beginFill(0xf97316);
+        fireGraphic.drawRect(CAMP_POS.x - 2, CAMP_POS.y - 2, 4 + Math.sin(ticker * 5), 4 + Math.cos(ticker * 5));
+        fireGraphic.beginFill(0xfef08a);
+        fireGraphic.drawRect(CAMP_POS.x - 1, CAMP_POS.y - 1, 2, 2);
+        fireGraphic.endFill();
+
+        // Smoke particles
+        smokeParticles.forEach(p => {
+          p.y += p.vy;
+          p.x += p.vx;
+          p.alpha -= 0.008;
+          if (p.alpha <= 0) {
+            p.x = CAMP_POS.x + (Math.random() - 0.5) * 2;
+            p.y = CAMP_POS.y - 3;
+            p.alpha = 0.7;
+          }
+        });
+
+        // Human Wandering
         humans.forEach(h => {
           h.x += h.vx;
           h.y += h.vy;
-          // Keep them loosely tethered to camp
-          if (Math.hypot(h.x - EAST_AFRICA.x, h.y - EAST_AFRICA.y) > 25) {
+          // Soft tether around camp center
+          if (Math.hypot(h.x - CAMP_POS.x, h.y - CAMP_POS.y) > 40) {
             h.vx *= -1;
             h.vy *= -1;
           }
         });
-      }
-    }
 
-    function draw() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      ctx.save();
-      // Center camera transformation
-      ctx.translate(canvas.width / 2, canvas.height / 2);
-      ctx.scale(camera.zoom, camera.zoom);
-      ctx.translate(-camera.x, -camera.y);
-
-      // 1. Draw World Map Canvas
-      ctx.imageSmoothingEnabled = false; // Keep 8-bit crisp look
-      ctx.drawImage(mapCanvas, 0, 0);
-
-      // 2. Draw East Africa Campfire
-      const flicker = Math.random() * 2;
-      ctx.fillStyle = '#f97316';
-      ctx.fillRect(EAST_AFRICA.x - 1, EAST_AFRICA.y - 1, 3 + flicker, 3 + flicker);
-      ctx.fillStyle = '#fef08a';
-      ctx.fillRect(EAST_AFRICA.x, EAST_AFRICA.y, 1, 1);
-
-      // 3. Draw Humans (Only visibly detailed when zoomed in)
-      if (camera.zoom > 2.0) {
-        humans.forEach(h => {
-          // Human body (3x4 pixel sprite)
-          ctx.fillStyle = h.color;
-          ctx.fillRect(Math.floor(h.x), Math.floor(h.y), 2, 3);
-          // Spear
-          ctx.fillStyle = '#64748b';
-          ctx.fillRect(Math.floor(h.x) + 2, Math.floor(h.y) - 1, 1, 4);
+        // Animal Wandering
+        animals.forEach(a => {
+          a.x += a.vx;
+          a.y += a.vy;
+          if (Math.random() < 0.02) a.vx *= -1;
         });
-      } else {
-        // Glowing population beacon from high orbit
-        ctx.fillStyle = 'rgba(251, 191, 36, 0.6)';
-        ctx.beginPath();
-        ctx.arc(EAST_AFRICA.x, EAST_AFRICA.y, 4, 0, Math.PI * 2);
-        ctx.fill();
       }
-
-      ctx.restore();
-
-      update();
-      requestAnimationFrame(draw);
-    }
-
-    draw();
+    });
   </script>
 </body>
 </html>
