@@ -3,220 +3,410 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chronos: Earth Simulator</title>
+  <title>Chronos: Earth 300,000 BCE</title>
   <style>
     :root {
-      --bg: #090d16;
-      --card: #131b2e;
+      --bg: #050811;
+      --panel: rgba(15, 23, 42, 0.85);
+      --border: #334155;
       --accent: #38bdf8;
-      --text: #e2e8f0;
-      --subtext: #94a3b8;
+      --gold: #fbbf24;
+      --text: #f8fafc;
     }
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
     body {
-      margin: 0;
       background: var(--bg);
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      padding: 16px;
-      box-sizing: border-box;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
     }
-    .container {
-      background: var(--card);
-      border: 1px solid #1e293b;
-      border-radius: 12px;
-      max-width: 650px;
+
+    #gameCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
       width: 100%;
-      padding: 24px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      height: 100%;
+      image-rendering: pixelated;
+      cursor: grab;
     }
-    .header {
+    #gameCanvas:active { cursor: grabbing; }
+
+    /* Top HUD */
+    .top-hud {
+      position: absolute;
+      top: 16px;
+      left: 20px;
+      right: 20px;
       display: flex;
       justify-content: space-between;
-      border-bottom: 1px solid #1e293b;
-      padding-bottom: 12px;
-      margin-bottom: 20px;
+      pointer-events: none;
     }
-    .badge { color: var(--accent); font-weight: 600; }
-    .meters {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-    .meter-box {
-      background: #0f172a;
-      padding: 12px;
+    .hud-card {
+      background: var(--panel);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      padding: 12px 18px;
       border-radius: 8px;
-      font-size: 0.9rem;
-      border: 1px solid #1e293b;
+      pointer-events: auto;
     }
-    .meter-box strong { color: #fff; }
-    .story-log {
-      background: #0b1120;
-      border-left: 3px solid var(--accent);
-      padding: 16px;
-      border-radius: 0 8px 8px 0;
-      min-height: 70px;
-      line-height: 1.6;
-      margin-bottom: 20px;
-      color: #cbd5e1;
+    .era-badge {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--accent);
+      font-weight: 700;
     }
-    .input-section {
+    .year-display { font-size: 1.5rem; font-weight: 800; font-family: monospace; }
+
+    /* Start Overlay */
+    #start-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(5, 8, 17, 0.7);
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      justify-content: center;
+      align-items: center;
+      z-index: 50;
+      backdrop-filter: blur(4px);
+      transition: opacity 0.8s ease;
     }
-    input[type="text"] {
-      background: #0f172a;
-      border: 1px solid #334155;
-      color: #fff;
-      padding: 14px;
-      border-radius: 8px;
-      font-size: 1rem;
-      outline: none;
-    }
-    input[type="text"]:focus { border-color: var(--accent); }
-    button {
-      background: #0284c7;
-      color: white;
+    #start-overlay h1 { font-size: 3rem; margin-bottom: 8px; letter-spacing: 2px; }
+    #start-overlay p { color: #94a3b8; margin-bottom: 24px; font-size: 1.1rem; }
+    .btn-start {
+      background: var(--accent);
+      color: #04101e;
       border: none;
-      padding: 14px;
+      padding: 14px 36px;
+      font-size: 1.1rem;
+      font-weight: 700;
       border-radius: 8px;
-      font-weight: 600;
-      font-size: 1rem;
       cursor: pointer;
-      transition: opacity 0.2s;
+      transition: transform 0.2s, box-shadow 0.2s;
     }
-    button:disabled { opacity: 0.4; cursor: not-allowed; }
-    .suggestions {
+    .btn-start:hover { transform: scale(1.05); box-shadow: 0 0 20px rgba(56, 189, 248, 0.5); }
+
+    /* Bottom Timeline Bar */
+    .bottom-bar {
+      position: absolute;
+      bottom: 16px;
+      left: 20px;
+      right: 20px;
+      background: var(--panel);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
       display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 10px;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 10;
     }
-    .chip {
+    .timeline-track {
+      width: 100%;
+      height: 8px;
       background: #1e293b;
-      color: var(--subtext);
-      font-size: 0.8rem;
-      padding: 6px 12px;
-      border-radius: 100px;
-      cursor: pointer;
-      border: 1px solid transparent;
+      border-radius: 4px;
+      position: relative;
     }
-    .chip:hover { border-color: var(--accent); color: #fff; }
+    .timeline-progress {
+      width: 2%;
+      height: 100%;
+      background: var(--accent);
+      border-radius: 4px;
+      transition: width 0.3s;
+    }
+    .timeline-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .milestones {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      font-size: 0.9rem;
+    }
+    .milestone-tag {
+      background: #1e293b;
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+    }
+    .milestone-tag.done {
+      border-color: var(--gold);
+      color: var(--gold);
+      background: rgba(251, 191, 36, 0.1);
+    }
+    .btn-leap {
+      background: #1e293b;
+      color: #64748b;
+      border: 1px solid #334155;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: not-allowed;
+      transition: all 0.3s;
+    }
+    .btn-leap.active {
+      background: var(--gold);
+      color: #000;
+      border-color: var(--gold);
+      cursor: pointer;
+      box-shadow: 0 0 15px rgba(251, 191, 36, 0.4);
+    }
   </style>
 </head>
 <body>
 
-<div class="container">
-  <div class="header">
-    <span class="badge" id="era-text">Cretaceous Period</span>
-    <span id="year-text">66,000,000 BCE</span>
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- Start Intro Screen -->
+  <div id="start-overlay">
+    <h1>CHRONOS</h1>
+    <p>A living 8-bit simulation of Earth's entire history</p>
+    <button class="btn-start" onclick="startGame()">ENTER 300,000 BCE</button>
   </div>
 
-  <div class="meters">
-    <div class="meter-box">🌿 Dominant: <strong id="dom-text">Dinosaurs</strong></div>
-    <div class="meter-box">⚙️ Tech: <strong id="tech-text">None (Biological)</strong></div>
-    <div class="meter-box">🌡️ Temp: <strong id="temp-text">24</strong>°C</div>
-    <div class="meter-box">💨 Oxygen: <strong id="o2-text">28</strong>%</div>
-  </div>
-
-  <div class="story-log" id="story-box">
-    The world is lush, warm, and ruled by massive reptiles. An asteroid looms in the outer atmosphere. What intervention will you enact on this world?
-  </div>
-
-  <div class="input-section">
-    <input type="text" id="action-input" placeholder="Type what you want to happen...">
-    <button id="submit-btn" onclick="takeTurn()">Alter Earth's History</button>
-    <div class="suggestions" id="chips-container">
-      <span class="chip" onclick="useChip(this)">Deflect the asteroid away from Earth</span>
-      <span class="chip" onclick="useChip(this)">Let the asteroid strike</span>
+  <!-- Top HUD -->
+  <div class="top-hud">
+    <div class="hud-card">
+      <div class="era-badge" id="era-label">Paleolithic Dawn</div>
+      <div class="year-display" id="year-label">300,000 BCE</div>
+    </div>
+    <div class="hud-card">
+      <div>🌍 Global Population: <strong id="pop-label">1,200</strong></div>
+      <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 4px;">Zoom: <span id="zoom-label">1.0x</span></div>
     </div>
   </div>
-</div>
 
-<script>
-  // Initial World State
-  let worldState = {
-    era: "Cretaceous Period",
-    year: "66,000,000 BCE",
-    dominant: "Dinosaurs",
-    tech: "None (Wild)",
-    temp: 24,
-    oxygen: 28
-  };
+  <!-- Bottom Timeline & Controls -->
+  <div class="bottom-bar">
+    <div class="timeline-track">
+      <div class="timeline-progress" id="time-prog"></div>
+    </div>
+    <div class="timeline-controls">
+      <div class="milestones">
+        <span>Era Goals:</span>
+        <span class="milestone-tag done" id="m1">🔥 Master Fire</span>
+        <span class="milestone-tag" id="m2" onclick="completeMilestone()">🦴 Form First Clan (Click to complete)</span>
+      </div>
+      <button class="btn-leap" id="leap-btn" onclick="leapEra()">⚡ SKIP TO NEXT ERA</button>
+    </div>
+  </div>
 
-  function useChip(element) {
-    document.getElementById('action-input').value = element.innerText;
-  }
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
 
-  async function takeTurn() {
-    const input = document.getElementById('action-input');
-    const btn = document.getElementById('submit-btn');
-    const storyBox = document.getElementById('story-box');
-    const action = input.value.trim();
+    // Screen dimensions
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
 
-    if (!action) return;
+    // Map Dimensions (Retro Pixel Earth World Size)
+    const WORLD_W = 1200;
+    const WORLD_H = 650;
 
-    // Loading State
-    btn.disabled = true;
-    btn.innerText = "Simulating Millennia...";
-    storyBox.innerText = "The timeline fractures and recalculates...";
+    // Camera State
+    // East Africa coordinate inside this world: x ~ 620, y ~ 360
+    let camera = {
+      x: WORLD_W / 2,
+      y: WORLD_H / 2,
+      zoom: 0.85,
+      targetX: WORLD_W / 2,
+      targetY: WORLD_H / 2,
+      targetZoom: 0.85
+    };
 
-    try {
-      const response = await fetch('/api/turn', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ worldState, playerInput: action })
+    let isDragging = false;
+    let dragStart = { x: 0, y: 0 };
+    let gameStarted = false;
+
+    // Simple pixelated Earth world map matrix
+    // We generate a retro landmass buffer
+    const mapCanvas = document.createElement('canvas');
+    mapCanvas.width = WORLD_W;
+    mapCanvas.height = WORLD_H;
+    const mapCtx = mapCanvas.getContext('2d');
+
+    function generatePixelEarth() {
+      // 1. Deep Ocean
+      mapCtx.fillStyle = '#1e3a8a';
+      mapCtx.fillRect(0, 0, WORLD_W, WORLD_H);
+
+      // Rough blocky continents for retro feel
+      mapCtx.fillStyle = '#15803d'; // Forest/Grass
+
+      // Africa
+      mapCtx.fillRect(560, 240, 110, 190);
+      mapCtx.fillRect(590, 430, 60, 80);
+      // Sahara (Desert)
+      mapCtx.fillStyle = '#ca8a04';
+      mapCtx.fillRect(550, 240, 140, 60);
+
+      // Eurasia
+      mapCtx.fillStyle = '#15803d';
+      mapCtx.fillRect(520, 130, 360, 100);
+      mapCtx.fillRect(720, 200, 160, 100);
+
+      // Americas
+      mapCtx.fillRect(220, 140, 120, 140);
+      mapCtx.fillRect(280, 290, 80, 170);
+
+      // Ice Caps
+      mapCtx.fillStyle = '#e0f2fe';
+      mapCtx.fillRect(0, 0, WORLD_W, 30);
+      mapCtx.fillRect(0, WORLD_H - 40, WORLD_W, 40);
+    }
+    generatePixelEarth();
+
+    // The Little Humans in East Africa (300,000 BCE)
+    const humans = [];
+    const EAST_AFRICA = { x: 630, y: 370 };
+
+    for (let i = 0; i < 25; i++) {
+      humans.push({
+        x: EAST_AFRICA.x + (Math.random() * 40 - 20),
+        y: EAST_AFRICA.y + (Math.random() * 40 - 20),
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: (Math.random() - 0.5) * 0.4,
+        color: i % 2 === 0 ? '#d97706' : '#92400e' // Leather / pelt colors
       });
+    }
 
-      if (!response.ok) throw new Error("Turn failed");
+    // Input Handlers
+    window.addEventListener('mousedown', e => {
+      if (e.clientY > window.innerHeight - 100) return; // Ignore clicks near timeline
+      isDragging = true;
+      dragStart = { x: e.clientX, y: e.clientY };
+    });
 
-      const update = await response.json();
+    window.addEventListener('mousemove', e => {
+      if (!isDragging) return;
+      const dx = (e.clientX - dragStart.x) / camera.zoom;
+      const dy = (e.clientY - dragStart.y) / camera.zoom;
+      camera.x -= dx;
+      camera.y -= dy;
+      camera.targetX = camera.x;
+      camera.targetY = camera.y;
+      dragStart = { x: e.clientX, y: e.clientY };
+    });
 
-      // Mutate World State
-      worldState.era = update.next_era;
-      worldState.year = update.next_year;
-      worldState.dominant = update.dominant;
-      worldState.tech = update.tech;
-      worldState.temp += (update.stat_changes?.temp || 0);
-      worldState.oxygen += (update.stat_changes?.oxygen || 0);
+    window.addEventListener('mouseup', () => isDragging = false);
 
-      // Render Screen
-      document.getElementById('era-text').innerText = worldState.era;
-      document.getElementById('year-text').innerText = worldState.year;
-      document.getElementById('dom-text').innerText = worldState.dominant;
-      document.getElementById('tech-text').innerText = worldState.tech;
-      document.getElementById('temp-text').innerText = worldState.temp;
-      document.getElementById('o2-text').innerText = worldState.oxygen;
-      storyBox.innerText = update.story;
+    window.addEventListener('wheel', e => {
+      const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
+      camera.targetZoom = Math.min(Math.max(camera.targetZoom * zoomFactor, 0.7), 12.0);
+    });
 
-      // Render Suggested Chips
-      const chipsContainer = document.getElementById('chips-container');
-      chipsContainer.innerHTML = '';
-      if (update.suggested_ideas) {
-        update.suggested_ideas.forEach(idea => {
-          const chip = document.createElement('span');
-          chip.className = 'chip';
-          chip.innerText = idea;
-          chip.onclick = () => useChip(chip);
-          chipsContainer.appendChild(chip);
+    // Start Game Cinematic Zoom
+    function startGame() {
+      document.getElementById('start-overlay').style.opacity = '0';
+      setTimeout(() => document.getElementById('start-overlay').style.display = 'none', 800);
+
+      // Fly camera into East Africa
+      camera.targetX = EAST_AFRICA.x;
+      camera.targetY = EAST_AFRICA.y;
+      camera.targetZoom = 6.5; // Zoom right down to ground level
+      gameStarted = true;
+    }
+
+    // Milestone Completion
+    let milestoneDone = false;
+    function completeMilestone() {
+      milestoneDone = true;
+      const m2 = document.getElementById('m2');
+      m2.classList.add('done');
+      m2.innerText = "🦴 Formed First Clan ✓";
+
+      const leapBtn = document.getElementById('leap-btn');
+      leapBtn.classList.add('active');
+    }
+
+    function leapEra() {
+      if (!milestoneDone) return;
+      alert("⚡ CHRONOS LEAP! Time jumps ahead 100,000 years into the Out-of-Africa Migration era!");
+      document.getElementById('year-label').innerText = "200,000 BCE";
+      document.getElementById('era-label').innerText = "The Great Migration";
+      document.getElementById('time-prog').style.width = "10%";
+    }
+
+    // Game Loop
+    function update() {
+      // Smooth camera interpolation (LERP)
+      camera.x += (camera.targetX - camera.x) * 0.05;
+      camera.y += (camera.targetY - camera.y) * 0.05;
+      camera.zoom += (camera.targetZoom - camera.zoom) * 0.05;
+
+      document.getElementById('zoom-label').innerText = camera.zoom.toFixed(1) + 'x';
+
+      // Update wander of the first humans
+      if (gameStarted) {
+        humans.forEach(h => {
+          h.x += h.vx;
+          h.y += h.vy;
+          // Keep them loosely tethered to camp
+          if (Math.hypot(h.x - EAST_AFRICA.x, h.y - EAST_AFRICA.y) > 25) {
+            h.vx *= -1;
+            h.vy *= -1;
+          }
         });
       }
-
-      input.value = '';
-    } catch (err) {
-      storyBox.innerText = "⚠️ An anomaly in the timeline occurred. (Make sure your GEMINI_API_KEY is added to Vercel).";
-    } finally {
-      btn.disabled = false;
-      btn.innerText = "Alter Earth's History";
     }
-  }
-</script>
 
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.save();
+      // Center camera transformation
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.scale(camera.zoom, camera.zoom);
+      ctx.translate(-camera.x, -camera.y);
+
+      // 1. Draw World Map Canvas
+      ctx.imageSmoothingEnabled = false; // Keep 8-bit crisp look
+      ctx.drawImage(mapCanvas, 0, 0);
+
+      // 2. Draw East Africa Campfire
+      const flicker = Math.random() * 2;
+      ctx.fillStyle = '#f97316';
+      ctx.fillRect(EAST_AFRICA.x - 1, EAST_AFRICA.y - 1, 3 + flicker, 3 + flicker);
+      ctx.fillStyle = '#fef08a';
+      ctx.fillRect(EAST_AFRICA.x, EAST_AFRICA.y, 1, 1);
+
+      // 3. Draw Humans (Only visibly detailed when zoomed in)
+      if (camera.zoom > 2.0) {
+        humans.forEach(h => {
+          // Human body (3x4 pixel sprite)
+          ctx.fillStyle = h.color;
+          ctx.fillRect(Math.floor(h.x), Math.floor(h.y), 2, 3);
+          // Spear
+          ctx.fillStyle = '#64748b';
+          ctx.fillRect(Math.floor(h.x) + 2, Math.floor(h.y) - 1, 1, 4);
+        });
+      } else {
+        // Glowing population beacon from high orbit
+        ctx.fillStyle = 'rgba(251, 191, 36, 0.6)';
+        ctx.beginPath();
+        ctx.arc(EAST_AFRICA.x, EAST_AFRICA.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+
+      update();
+      requestAnimationFrame(draw);
+    }
+
+    draw();
+  </script>
 </body>
 </html>
