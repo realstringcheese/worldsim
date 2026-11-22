@@ -4,13 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Chronos: Earth 300,000 BCE</title>
-  <!-- PixiJS WebGL Engine -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.2/pixi.min.js"></script>
   <style>
     :root {
-      --bg: #030712;
-      --panel: rgba(15, 23, 42, 0.95);
-      --border: #334155;
+      --bg: #020617;
+      --panel: rgba(10, 15, 28, 0.90);
+      --border: #1e293b;
       --accent: #38bdf8;
       --gold: #fbbf24;
       --green: #22c55e;
@@ -26,84 +25,99 @@
       height: 100vh;
     }
 
-    #canvas-container {
-      position: absolute;
-      inset: 0;
-      z-index: 1;
-    }
-    #canvas-container canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-      cursor: grab;
-    }
+    #canvas-container { position: fixed; inset: 0; z-index: 1; }
+    #canvas-container canvas { width: 100%; height: 100%; display: block; cursor: grab; }
     #canvas-container canvas:active { cursor: grabbing; }
 
     /* Top HUD */
     .top-hud {
       position: fixed;
-      top: 16px;
-      left: 20px;
-      right: 20px;
+      top: 14px;
+      left: 16px;
+      right: 16px;
       display: flex;
       justify-content: space-between;
+      align-items: flex-start;
       gap: 12px;
       z-index: 50;
       pointer-events: none;
     }
     .hud-card {
       background: var(--panel);
-      backdrop-filter: blur(8px);
+      backdrop-filter: blur(10px);
       border: 1px solid var(--border);
-      padding: 12px 20px;
+      padding: 10px 16px;
       border-radius: 10px;
       pointer-events: auto;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.6);
     }
     .era-badge {
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       letter-spacing: 1.5px;
       text-transform: uppercase;
       color: var(--accent);
-      font-weight: 700;
+      font-weight: 800;
     }
-    .year-display { font-size: 1.5rem; font-weight: 800; font-family: monospace; }
+    .year-display { font-size: 1.4rem; font-weight: 800; font-family: monospace; margin-top: 2px; }
+    .nav-btns { display: flex; gap: 6px; margin-top: 8px; justify-content: flex-end; }
+    .btn-mini {
+      background: #1e293b;
+      color: #cbd5e1;
+      border: 1px solid #334155;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-mini:hover { border-color: var(--accent); color: #fff; }
 
-    /* Bottom Timeline Bar */
+    /* Character Inspector Toast */
+    #inspector-card {
+      position: fixed;
+      top: 90px;
+      left: 16px;
+      background: var(--panel);
+      border: 1px solid var(--accent);
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      z-index: 50;
+      display: none;
+      max-width: 240px;
+    }
+
+    /* Bottom Timeline */
     .bottom-bar {
       position: fixed;
-      bottom: 20px;
-      left: 20px;
-      right: 20px;
+      bottom: 14px;
+      left: 16px;
+      right: 16px;
       background: var(--panel);
       backdrop-filter: blur(12px);
       border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 16px 24px;
+      border-radius: 12px;
+      padding: 12px 18px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 16px;
-      z-index: 50;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-    }
-    .milestones-group {
-      display: flex;
-      gap: 10px;
-      align-items: center;
       flex-wrap: wrap;
+      gap: 12px;
+      z-index: 50;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.7);
     }
+    .milestones-group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .milestone-btn {
-      background: #1e293b;
+      background: #0f172a;
       color: #94a3b8;
       border: 1px solid #334155;
-      padding: 10px 16px;
-      border-radius: 8px;
-      font-size: 0.85rem;
+      padding: 7px 12px;
+      border-radius: 7px;
+      font-size: 0.8rem;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       transition: all 0.2s;
     }
     .milestone-btn:hover { border-color: var(--accent); color: #fff; }
@@ -114,42 +128,43 @@
       font-weight: 700;
     }
 
-    .action-group {
-      display: flex;
-      gap: 10px;
-      align-items: center;
+    .action-group { display: flex; gap: 8px; align-items: center; }
+    .btn-speed {
+      background: #0f172a;
+      color: #94a3b8;
+      border: 1px solid #334155;
+      padding: 7px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-weight: 700;
     }
+    .btn-speed.active { background: var(--accent); color: #020617; border-color: var(--accent); }
     .btn-leap {
-      background: #334155;
+      background: #1e293b;
       color: #64748b;
-      border: none;
-      padding: 12px 24px;
+      border: 1px solid #334155;
+      padding: 8px 18px;
       border-radius: 8px;
       font-weight: 800;
-      font-size: 0.95rem;
+      font-size: 0.85rem;
       cursor: not-allowed;
       transition: all 0.3s;
-      letter-spacing: 0.5px;
     }
     .btn-leap.unlocked {
       background: var(--gold);
-      color: #030712;
+      color: #020617;
+      border-color: var(--gold);
       cursor: pointer;
-      box-shadow: 0 0 20px rgba(251, 191, 36, 0.6);
-      animation: pulse 1.5s infinite;
-    }
-    @keyframes pulse {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.03); }
-      100% { transform: scale(1); }
+      box-shadow: 0 0 18px rgba(251, 191, 36, 0.55);
     }
 
-    /* Intro Overlay - Isolated with Highest Z-Index */
+    /* Intro Modal */
     #intro-modal {
       position: fixed;
       inset: 0;
-      background: rgba(3, 7, 18, 0.9);
-      backdrop-filter: blur(10px);
+      background: rgba(2, 6, 23, 0.85);
+      backdrop-filter: blur(8px);
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -157,39 +172,71 @@
       z-index: 9999;
       text-align: center;
       padding: 20px;
-      transition: opacity 0.5s ease;
+      transition: opacity 0.6s ease;
     }
     #intro-modal h1 {
       font-size: 3.5rem;
-      letter-spacing: 4px;
-      margin-bottom: 8px;
+      letter-spacing: 5px;
+      margin-bottom: 10px;
       text-shadow: 0 0 30px rgba(56, 189, 248, 0.5);
     }
-    #intro-modal p { color: #94a3b8; max-width: 500px; line-height: 1.6; margin-bottom: 28px; }
+    #intro-modal p { color: #94a3b8; max-width: 480px; line-height: 1.6; margin-bottom: 26px; font-size: 1rem; }
     .btn-start {
       background: var(--accent);
-      color: #030712;
+      color: #020617;
       border: none;
-      padding: 16px 42px;
-      font-size: 1.15rem;
+      padding: 15px 38px;
+      font-size: 1.05rem;
       font-weight: 800;
       border-radius: 8px;
       cursor: pointer;
-      box-shadow: 0 0 25px rgba(56, 189, 248, 0.6);
+      box-shadow: 0 0 25px rgba(56, 189, 248, 0.5);
       transition: transform 0.2s, background 0.2s;
     }
-    .btn-start:hover { transform: scale(1.06); background: #7dd3fc; }
+    .btn-start:hover { transform: scale(1.05); background: #7dd3fc; }
+
+    /* Intervention Modal */
+    #intervention-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.78);
+      backdrop-filter: blur(6px);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 9990;
+    }
+    .intervention-box {
+      background: var(--panel);
+      border: 1px solid var(--accent);
+      padding: 22px;
+      border-radius: 12px;
+      max-width: 480px;
+      width: 90%;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .intervention-box input {
+      background: #020617;
+      border: 1px solid #334155;
+      padding: 12px;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 0.95rem;
+      outline: none;
+    }
+    .intervention-box input:focus { border-color: var(--accent); }
   </style>
 </head>
 <body>
 
-  <!-- Game Canvas Container -->
   <div id="canvas-container"></div>
 
-  <!-- Intro Modal (Active on load) -->
+  <!-- Intro Modal -->
   <div id="intro-modal">
     <h1>CHRONOS</h1>
-    <p>A living 8-bit simulation of Earth's true geography. The camera is locked to planetary bounds—zoom and pan freely.</p>
+    <p>An 8-bit living simulation of Earth. Zoom smoothly from orbital satellite down through the canopy to watch early humans survive in 300,000 BCE.</p>
     <button class="btn-start" id="start-btn">ENTER 300,000 BCE</button>
   </div>
 
@@ -198,74 +245,784 @@
     <div class="hud-card">
       <div class="era-badge" id="era-label">PALEOLITHIC DAWN</div>
       <div class="year-display" id="year-label">300,000 BCE</div>
+      <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px;" id="altitude-label">Altitude: Orbit</div>
     </div>
+
     <div class="hud-card" style="text-align: right;">
-      <div style="font-size: 0.8rem; color: #94a3b8;">GLOBAL POPULATION</div>
-      <div style="font-weight: 800; color: #f8fafc; font-size: 1.3rem;" id="pop-label">1,500</div>
-      <div style="font-size: 0.8rem; color: var(--gold); margin-top: 4px;">Zoom: <span id="zoom-text">1.0x</span></div>
+      <div style="font-size: 0.75rem; color: #94a3b8;">GLOBAL HOMINIDS: <strong style="color:#fff;" id="pop-label">1,500</strong></div>
+      <div style="font-size: 0.75rem; color: var(--gold); margin-top: 2px;">Zoom: <span id="zoom-text">1.0x</span></div>
+      <div class="nav-btns">
+        <button class="btn-mini" id="btn-orbit">🌍 Orbit View</button>
+        <button class="btn-mini" id="btn-camp">🔥 Rift Valley Camp</button>
+      </div>
     </div>
   </div>
 
-  <!-- Bottom Interactive Timeline -->
+  <!-- Inspector -->
+  <div id="inspector-card"></div>
+
+  <!-- Bottom Timeline -->
   <div class="bottom-bar">
     <div class="milestones-group">
-      <span style="font-size: 0.85rem; font-weight: bold; color: #cbd5e1;">Era Goals:</span>
-      <button class="milestone-btn" id="m1">
-        <span>🔥</span> Harness Controlled Fire
-      </button>
-      <button class="milestone-btn" id="m2">
-        <span>🪓</span> Acheulean Handaxes
-      </button>
-      <button class="milestone-btn" id="m3">
-        <span>🗣️</span> Form Clan Language
-      </button>
+      <span style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1;">Era Goals:</span>
+      <button class="milestone-btn" id="m1">🔥 Controlled Fire</button>
+      <button class="milestone-btn" id="m2">🪓 Flint Handaxes</button>
+      <button class="milestone-btn" id="m3">🗣️ Tribal Language</button>
     </div>
 
     <div class="action-group">
+      <button class="btn-speed" id="sp-0">❚❚</button>
+      <button class="btn-speed active" id="sp-1">1x</button>
+      <button class="btn-speed" id="sp-5">5x</button>
+      <button class="milestone-btn" id="btn-intervene" style="border-color: var(--accent); color: var(--accent);">⚡ Intervene</button>
       <button class="btn-leap" id="leap-btn">⚡ CHRONOS LEAP</button>
     </div>
   </div>
 
-  <script>
-    let gameStarted = false;
+  <!-- Custom Intervention Modal -->
+  <div id="intervention-modal">
+    <div class="intervention-box">
+      <h3 style="color: var(--accent);">Intervene in History</h3>
+      <p style="font-size: 0.85rem; color: #94a3b8;">Describe an evolutionary leap, climate shift, or cultural discovery for this era:</p>
+      <input type="text" id="intervene-input" placeholder="e.g. Teach the tribe to tame wild African painted dogs...">
+      <div style="display: flex; justify-content: flex-end; gap: 8px;">
+        <button class="btn-mini" id="close-intervene">Cancel</button>
+        <button class="btn-start" id="submit-intervene" style="padding: 8px 18px; font-size: 0.85rem;">Enact</button>
+      </div>
+    </div>
+  </div>
 
-    // 1. Initialize PixiJS WebGL Renderer
-    PIXI.BaseTexture.defaultOptions.scaleMode = PIXI.SCALE_MODES.NEAREST;
+  <script>
+    // =========================================================
+    // 1. INITIALIZE PIXI ENGINE & CONSTANTS
+    // =========================================================
+    let gameStarted = false;
+    const MAP_WIDTH = 2048;
+    const MAP_HEIGHT = 1024;
+    const MAX_ZOOM = 750.0;
+
+    // East African Rift Valley (Serengeti / Olduvai area: ~35.8°E, ~2.8°S)
+    let CAMP_POS = {
+      x: ((35.8 + 180) / 360) * MAP_WIDTH,
+      y: ((90 - (-2.8)) / 180) * MAP_HEIGHT
+    };
 
     const app = new PIXI.Application({
       resizeTo: window,
-      backgroundColor: 0x030712,
+      backgroundColor: 0x020617,
       antialias: false,
       resolution: window.devicePixelRatio || 1,
       autoDensity: true
     });
-    
-    const canvasElement = app.view;
-    document.getElementById('canvas-container').appendChild(canvasElement);
+    const canvasEl = app.view;
+    document.getElementById('canvas-container').appendChild(canvasEl);
 
-    // Map Dimensions
-    const MAP_WIDTH = 2048;
-    const MAP_HEIGHT = 1024;
-
-    // East African Rift Valley Coordinates
-    const CAMP_POS = {
-      x: Math.round(((36 + 180) / 360) * MAP_WIDTH),     // ~1229 px
-      y: Math.round(((90 - (-3)) / 180) * MAP_HEIGHT)    // ~529 px
-    };
-
-    // Root World Container
     const world = new PIXI.Container();
     app.stage.addChild(world);
 
-    // Layers
-    const mapLayer = new PIXI.Container();
-    const foliageLayer = new PIXI.Container();
-    const entitiesLayer = new PIXI.Container();
-    const fxLayer = new PIXI.Container();
-    const beaconLayer = new PIXI.Container();
-    world.addChild(mapLayer, foliageLayer, entitiesLayer, fxLayer, beaconLayer);
+    // Sub-layers ordered bottom-to-top
+    const mapSmoothLayer = new PIXI.Container();   // Blended terrain base at deep zoom
+    const mapPixelLayer = new PIXI.Container();    // Crisp 8-bit Earth map from space
+    const groundDetailLayer = new PIXI.Container();// Procedural grass/soil/water textures
+    const campGroundLayer = new PIXI.Container();  // Camp clearing dirt & footprints
+    const microPropsLayer = new PIXI.Container();  // Grass tufts, boulders, bushes
+    const campLayer = new PIXI.Container();        // Huts, fire, animals, humans
+    const treeLayer = new PIXI.Container();        // Biome-accurate forest canopies
+    const beaconLayer = new PIXI.Container();      // Orbital markers
 
-    // 2. Camera Clamping (Prevents moving into grey void)
+    world.addChild(
+      mapSmoothLayer,
+      mapPixelLayer,
+      groundDetailLayer,
+      campGroundLayer,
+      microPropsLayer,
+      campLayer,
+      treeLayer,
+      beaconLayer
+    );
+
+    // =========================================================
+    // 2. DETAILED PIXEL ART SPRITE GENERATORS (MATRICES)
+    // =========================================================
+    function buildSpriteFromMatrix(rows, palette) {
+      const h = rows.length;
+      const w = rows[0].length;
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const ctx = c.getContext('2d');
+      for (let y = 0; y < h; y++) {
+        const row = rows[y];
+        for (let x = 0; x < row.length; x++) {
+          const ch = row[x];
+          if (ch !== '.' && palette[ch]) {
+            ctx.fillStyle = palette[ch];
+            ctx.fillRect(x, y, 1, 1);
+          }
+        }
+      }
+      const tex = PIXI.Texture.from(c);
+      tex.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
+      return tex;
+    }
+
+    // 20x28 High-Detail Prehistoric Humans (Visible Eyes, Face, Hair, Fur Tunics, Spears)
+    const humanPalette = {
+      'O': '#18100c', // Dark outline
+      'H': '#291d16', // Dark hair
+      'h': '#443227', // Hair highlight
+      'G': '#9ca3af', // Elder gray hair/beard
+      'S': '#c68642', // Skin base
+      's': '#e0ac69', // Skin highlight (forehead/cheeks)
+      'd': '#8d5524', // Skin shadow (chin/neck)
+      'W': '#f8fafc', // Eye sclera
+      'E': '#0f172a', // Eye pupil
+      'F': '#9a3412', // Fur tunic base
+      'f': '#c2410c', // Fur highlight
+      'f2': '#7c2d12',// Fur shadow
+      'L': '#451a03', // Leather belt/boots
+      'P': '#78350f', // Spear shaft
+      'M': '#94a3b8', // Flint/Stone blade
+      'm': '#e2e8f0', // Flint edge highlight
+      'B': '#d97706', // Basket weave
+    };
+
+    // Frame 1 & Frame 2 for Hunter (with visible face, eyes, fur wrap, flint spear)
+    const hunterFrame1 = [
+      '.............O......',
+      '............OMO.....',
+      '...........OMmO.....',
+      '......OOOOO.OMO.....',
+      '.....OHhhhHO.O......',
+      '....OHHHHHHHOOPO....',
+      '....OHssSssHOOPO....',
+      '....OHWEsEWHOOPO....', // Clear eyes!
+      '....O.SsdSs.O.P.....',
+      '.....OSSSSSO..P.....',
+      '......OdddO...P.....',
+      '....OOFFFFFOO.P.....',
+      '...OSOffffFFO.P.....',
+      '...OSOffFFFfO.P.....',
+      '...O.OFFLLFFOOPO....',
+      '.....OFFLLFFOSSO....',
+      '.....OFFLLFFO.P.....',
+      '......OFFFFO..P.....',
+      '......OFOOFO..P.....',
+      '.....OSSO.OSSO......',
+      '.....OSSO.OSSO......',
+      '.....OLLO..OLLO.....',
+      '....OLLO....OLLO....',
+      '....OOO......OOO....',
+    ];
+
+    const hunterFrame2 = [
+      '.............O......',
+      '............OMO.....',
+      '...........OMmO.....',
+      '......OOOOO.OMO.....',
+      '.....OHhhhHO.O......',
+      '....OHHHHHHHOOPO....',
+      '....OHssSssHOOPO....',
+      '....OHWEsEWHOOPO....',
+      '....O.SsdSs.O.P.....',
+      '.....OSSSSSO..P.....',
+      '......OdddO...P.....',
+      '....OOFFFFFOO.P.....',
+      '...OSOffffFFO.P.....',
+      '...OSOffFFFfO.P.....',
+      '...O.OFFLLFFOOPO....',
+      '.....OFFLLFFOSSO....',
+      '.....OFFLLFFO.P.....',
+      '......OFFFFO..P.....',
+      '......OFOOFO..P.....',
+      '......OSSO.OSSO.....',
+      '......OSSO.OSSO.....',
+      '......OLLO.OLLO.....',
+      '.....OLLO...OLLO....',
+      '.....OOO.....OOO....',
+    ];
+
+    // Gatherer (carrying basket, hair bun)
+    const gathererFrame1 = [
+      '......OOOO..........',
+      '.....OHhhhHO........',
+      '....OHHHHHHHO.......',
+      '....OHssSssHO.......',
+      '....OHWEsEWHO.......',
+      '....O.SsdSs.O.......',
+      '.....OSSSSSO........',
+      '......OdddO.........',
+      '....OOFFFFFOO.......',
+      '...OSOffffFFSO.OBBO.',
+      '...OSOffFFffSOOBBBBO',
+      '....O.FFLLFFOOBBBBBO',
+      '......FFLLFFOOBBBBO.',
+      '......OFFFFO..OOOO..',
+      '......OFFFFO........',
+      '......OFOOFO........',
+      '.....OSSO.OSSO......',
+      '.....OSSO.OSSO......',
+      '.....OLLO..OLLO.....',
+      '....OLLO....OLLO....',
+      '....OOO......OOO....',
+    ];
+
+    // Elder (gray beard, wooden staff)
+    const elderFrame = [
+      '..O.................',
+      '.OHO................',
+      '.OHO..OOOOO.........',
+      '.OHO.OGGGGGGO.......',
+      '.OHOOGGssSssGO......',
+      '.OHOOGGWEsEWGO......',
+      '.OHO.O.SsdSsO.......',
+      '.OPO..OGGGGGO.......',
+      '.OPO..OGGGGO........',
+      '.OPO.OOFFFFFOO......',
+      '.OPOOSOffffFFSO.....',
+      '.OPO.O.FFLLFFO......',
+      '.OPO...FFLLFFO......',
+      '.OPO...OFFFFO.......',
+      '.OPO...OFOOFO.......',
+      '.OPO...OSSO.OSSO....',
+      '.OPO...OLLO.OLLO....',
+      '.OOO...OOO...OOO....',
+    ];
+
+    const texHunter1 = buildSpriteFromMatrix(hunterFrame1, humanPalette);
+    const texHunter2 = buildSpriteFromMatrix(hunterFrame2, humanPalette);
+    const texGatherer = buildSpriteFromMatrix(gathererFrame1, humanPalette);
+    const texElder = buildSpriteFromMatrix(elderFrame, humanPalette);
+
+    // Gazelle / Antelope (20x16)
+    const gazelleTex = buildSpriteFromMatrix([
+      '.............O.O....',
+      '............O...O...',
+      '...........O.O.O....',
+      '...........ODDDDDO..',
+      '..........ODDEWDDO..',
+      '...OOOOOO.ODDDDDDO..',
+      '..ODDDDDDODDDDOOO...',
+      '.ODDDDDDDDDDDDO.....',
+      '.OWWWWWWWWWWWDO.....',
+      '..O.O.....O.O.......',
+      '..O.O.....O.O.......',
+      '.O..O.....O..O......',
+      '.O..O.....O..O......',
+    ], {
+      'O': '#291d16', 'D': '#d97706', 'W': '#fef3c7', 'E': '#0f172a'
+    });
+
+    // Detailed Biome Trees (34x36)
+    const acaciaTex = buildSpriteFromMatrix([
+      '........OOOOOOOOOOOOOO............',
+      '....OOOOLLLLLLLLLLLLLLOOOO........',
+      '..OOLLLLGGGGGGGGGGGGGGLLLLOO......',
+      '.OLGGGGGGGGGGGGGGGGGGGGGGGGLO.....',
+      'OLGGGGGGGGGGGGGGGGGGGGGGGGGGGO....',
+      'ODGGGGGGGDDDDDGGGGGGDDDDGGGGDDO...',
+      '.OODDDDDDDDDDDDDDDDDDDDDDDDDOO....',
+      '...OOOOOOOOOOOOOOOOOOOOOOOOOO.....',
+      '.......OOBOO......OOBBO...........',
+      '........OOBBO....OOBBO............',
+      '.........OOBBO..OOBBO.............',
+      '..........OOBBOOOBBO..............',
+      '...........OOBBBBBO...............',
+      '............OOBBBO................',
+      '............OOBBBO................',
+      '............OOBBBO................',
+      '............OOBBBO................',
+      '............OOBBBO................',
+      '............OOBBBO................',
+      '............OOBBBO................',
+      '...........OOBBBBBO...............',
+      '..........OOBBBBBBBBO.............',
+      '.........OOOOOOOOOOOOO............',
+    ], {
+      'O': '#0f291e', 'L': '#86efac', 'G': '#22c55e', 'D': '#15803d', 'B': '#5c3a21'
+    });
+
+    const jungleTex = buildSpriteFromMatrix([
+      '......OOOOOOOOOO........',
+      '....OOLLLLGGGGGGGOO.....',
+      '..OOLLLGGGGGGGGGGGGOO...',
+      '.OLLGGGGGGGGGGGDDDDGGO..',
+      'OLGGGGGGGDDDDDDDDDDDGGO.',
+      'OGGGGGDDDDDDDDDDDDDDDDO.',
+      'ODDDDDDDDDDDDDDDDDDDDDO.',
+      '.OODDDDDDDDDDDDDDDDDOO..',
+      '...OOOOOOOBBBBOOOOOOO...',
+      '........OOBBBBO.........',
+      '........OOBBBBO.........',
+      '........OOBBBBO.........',
+      '........OOBBBBO.........',
+      '.......OOBBBBBBO........',
+      '......OOOOOOOOOOO.......',
+    ], {
+      'O': '#052e16', 'L': '#4ade80', 'G': '#16a34a', 'D': '#14532d', 'B': '#451a03'
+    });
+
+    const pineTex = buildSpriteFromMatrix([
+      '.........OO.........',
+      '........OGGO........',
+      '.......OGDDGO.......',
+      '......OOODDOOO......',
+      '.......OGGGGO.......',
+      '......OGGDDDGO......',
+      '.....OGGDDDDDGO.....',
+      '....OOODDDDDDOOO....',
+      '.....OGGGGGGGGO.....',
+      '....OGGGDDDDDDGO....',
+      '...OGGGDDDDDDDDGO...',
+      '..OOOOODDDDDDOOOOO..',
+      '........OBBO........',
+      '........OBBO........',
+      '........OBBO........',
+      '.......OOOOOO.......',
+    ], {
+      'O': '#022c22', 'G': '#10b981', 'D': '#065f46', 'B': '#451a03'
+    });
+
+    const cactusTex = buildSpriteFromMatrix([
+      '....OOO......',
+      '...OGGGO.....',
+      '.OOGGGDO..OO.',
+      'OGGOGGDO.OGGO',
+      'OGDOGGDOOOGDO',
+      '.OOGGGDDDDDO.',
+      '...OGGDOOOOO.',
+      '...OGGDO.....',
+      '...OGGDO.....',
+      '...OOOOO.....',
+    ], {
+      'O': '#052e16', 'G': '#4ade80', 'D': '#15803d'
+    });
+
+    // Grass Tuft / Pebble / Bush
+    const grassTex = buildSpriteFromMatrix([
+      '..O...O...',
+      '.OGO.OG..O',
+      '.OGDOOGDO.',
+      'OOGDDDDDO.',
+      '.OOOOOOO..',
+    ], { 'O': '#14532d', 'G': '#84cc16', 'D': '#4d7c0f' });
+
+    const rockTex = buildSpriteFromMatrix([
+      '....OOOOO...',
+      '..OOLLLLLO..',
+      '.OLLMMMMMDO.',
+      'OLMMMMDDDDDO',
+      'ODDDDDDDDDDO',
+      '.OOOOOOOOOO.',
+    ], { 'O': '#1e293b', 'L': '#cbd5e1', 'M': '#94a3b8', 'D': '#475569' });
+
+    // Hide Hut Shelter (36x28)
+    const hutTex = buildSpriteFromMatrix([
+      '.............O..O.............',
+      '............O.OO.O............',
+      '..........OOFFFFFFOO..........',
+      '........OOFFFFffffffOO........',
+      '......OOFFFFffffffFFFFOO......',
+      '....OOFFFFffffffffffFFFFOO....',
+      '...OFFFFffffffffffffffFFFFO...',
+      '..OFFFFffffffOOOOOOffffFFFFO..',
+      '.OFFFFfffffOOIIIIIIOOfffFFFFO.',
+      '.OFFFFffffOIIIIIIIIIIOffFFFFO.',
+      'OFFFFffffOIIIIIIIIIIIIOffFFFFO',
+      'OFFFFffffOIIIIIIIIIIIIOffFFFFO',
+      'OLLLLLLLLLOIIIIIIIIIIIOLLLLLLO',
+      'OOOOOOOOOOOOOOOOOOOOOOOOOOOOOO',
+    ], {
+      'O': '#1c1917', 'F': '#9a3412', 'f': '#c2410c', 'L': '#78350f', 'I': '#0c0a09'
+    });
+
+    // Seamless 64x64 Micro Ground Pixel Texture (Overlays real biome tints)
+    const microGroundCanvas = document.createElement('canvas');
+    microGroundCanvas.width = 64; microGroundCanvas.height = 64;
+    const mgCtx = microGroundCanvas.getContext('2d');
+    for (let y = 0; y < 64; y++) {
+      for (let x = 0; x < 64; x++) {
+        const r = Math.random();
+        if (r < 0.14) {
+          mgCtx.fillStyle = 'rgba(0, 0, 0, 0.12)';
+          mgCtx.fillRect(x, y, 1, 1);
+        } else if (r < 0.25) {
+          mgCtx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+          mgCtx.fillRect(x, y, 1, 1);
+        } else if (r < 0.28) {
+          // Tiny 2px grass blade speck
+          mgCtx.fillStyle = 'rgba(20, 83, 45, 0.22)';
+          mgCtx.fillRect(x, y, 1, 2);
+        }
+      }
+    }
+    const microGroundTex = PIXI.Texture.from(microGroundCanvas);
+    microGroundTex.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
+    const microGroundTiling = new PIXI.TilingSprite(microGroundTex, MAP_WIDTH, MAP_HEIGHT);
+    microGroundTiling.tileScale.set(0.0025);
+    microGroundTiling.alpha = 0;
+    groundDetailLayer.addChild(microGroundTiling);
+
+    // =========================================================
+    // 3. LOAD & QUANTIZE EARTH INTO VIBRANT 8-BIT + BIOME MAP
+    // =========================================================
+    // Biome IDs: 0=Ocean, 1=Shallow, 2=Desert, 3=Savanna, 4=Grass, 5=Forest, 6=Mountain, 7=Snow
+    const biomeGrid = new Uint8Array(MAP_WIDTH * MAP_HEIGHT);
+
+    // Default procedural fallback while texture loads
+    const pixelCanvas = document.createElement('canvas');
+    pixelCanvas.width = MAP_WIDTH; pixelCanvas.height = MAP_HEIGHT;
+    const pCtx = pixelCanvas.getContext('2d');
+    pCtx.fillStyle = '#0f2b66';
+    pCtx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+
+    const smoothCanvas = document.createElement('canvas');
+    smoothCanvas.width = MAP_WIDTH; smoothCanvas.height = MAP_HEIGHT;
+    const sCtx = smoothCanvas.getContext('2d');
+    sCtx.fillStyle = '#0f2b66';
+    sCtx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+
+    const pixelTex = PIXI.Texture.from(pixelCanvas);
+    pixelTex.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
+    const mapPixelSprite = new PIXI.Sprite(pixelTex);
+    mapPixelLayer.addChild(mapPixelSprite);
+
+    const smoothTex = PIXI.Texture.from(smoothCanvas);
+    smoothTex.baseTexture.scaleMode = PIXI.SCALE_MODES.LINEAR;
+    const mapSmoothSprite = new PIXI.Sprite(smoothTex);
+    mapSmoothLayer.addChild(mapSmoothSprite);
+
+    // Load NASA Earth Texture with CORS enabled and convert to vibrant 8-bit palette
+    const earthImg = new Image();
+    earthImg.crossOrigin = "anonymous";
+    earthImg.src = "https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/textures/planets/earth_atmos_2048.jpg";
+
+    earthImg.onload = () => {
+      try {
+        const tmp = document.createElement('canvas');
+        tmp.width = MAP_WIDTH; tmp.height = MAP_HEIGHT;
+        const tCtx = tmp.getContext('2d');
+        tCtx.drawImage(earthImg, 0, 0, MAP_WIDTH, MAP_HEIGHT);
+        const imgData = tCtx.getImageData(0, 0, MAP_WIDTH, MAP_HEIGHT);
+        const data = imgData.data;
+
+        for (let i = 0, px = 0; i < data.length; i += 4, px++) {
+          const r = data[i], g = data[i+1], b = data[i+2];
+          const lum = (r + g + b) / 3;
+          let nr = r, ng = g, nb = b, biome = 0;
+
+          if (b > r + 12 && b > g + 4) {
+            // Water
+            if (b > 110 || lum > 85) {
+              biome = 1; nr = 14; ng = 116; nb = 178; // Shallow turquoise shelf
+            } else if (lum > 45) {
+              biome = 0; nr = 15; ng = 52; nb = 122;  // Mid ocean
+            } else {
+              biome = 0; nr = 9; ng = 28; nb = 76;    // Deep trench
+            }
+          } else if (r > 185 && g > 185 && b > 185) {
+            // Snow / Ice
+            biome = 7;
+            if (lum > 220) { nr = 241; ng = 245; nb = 249; }
+            else { nr = 203; ng = 213; nb = 225; }
+          } else if (r > 135 && g > 105 && b < 110 && r > g + 8) {
+            // Desert
+            biome = 2;
+            if (lum > 170) { nr = 232; ng = 191; nb = 122; }
+            else { nr = 201; ng = 151; nb = 84; }
+          } else if (r >= g - 12 && g > b + 15 && r > 85) {
+            // Savanna / Steppe
+            biome = 3;
+            if (lum > 115) { nr = 166; ng = 175; nb = 74; }
+            else { nr = 132; ng = 146; nb = 58; }
+          } else if (g >= r && g > b) {
+            // Forest / Jungle / Lush Plains
+            if (lum < 85) {
+              biome = 5; nr = 22; ng = 101; nb = 52;  // Dense Jungle/Forest
+            } else {
+              biome = 4; nr = 58; ng = 154; nb = 68;  // Vibrant Grassland
+            }
+          } else {
+            // Mountain / Tundra / Rock
+            biome = 6;
+            if (lum > 130) { nr = 148; ng = 140; nb = 132; }
+            else { nr = 96; ng = 90; nb = 84; }
+          }
+
+          data[i] = nr; data[i+1] = ng; data[i+2] = nb;
+          biomeGrid[px] = biome;
+        }
+
+        pCtx.putImageData(imgData, 0, 0);
+        sCtx.putImageData(imgData, 0, 0);
+        pixelTex.baseTexture.update();
+        smoothTex.baseTexture.update();
+
+        // Ensure camp coordinate is strictly on solid savanna land
+        let cx = Math.floor(CAMP_POS.x), cy = Math.floor(CAMP_POS.y);
+        if (biomeGrid[cy * MAP_WIDTH + cx] <= 1) {
+          CAMP_POS.x += 8;
+        }
+      } catch (e) {
+        // Fallback if canvas tainted
+        sCtx.drawImage(earthImg, 0, 0, MAP_WIDTH, MAP_HEIGHT);
+        pCtx.drawImage(earthImg, 0, 0, MAP_WIDTH, MAP_HEIGHT);
+        pixelTex.baseTexture.update();
+        smoothTex.baseTexture.update();
+      }
+    };
+
+    // =========================================================
+    // 4. PROCEDURAL VIEWPORT TREE & GROUND FOLIAGE POOLS
+    // =========================================================
+    const TREE_POOL_SIZE = 1200;
+    const treePool = [];
+    for (let i = 0; i < TREE_POOL_SIZE; i++) {
+      const sp = new PIXI.Sprite(acaciaTex);
+      sp.anchor.set(0.5, 0.9);
+      sp.visible = false;
+      treeLayer.addChild(sp);
+      treePool.push(sp);
+    }
+
+    const PROP_POOL_SIZE = 800;
+    const propPool = [];
+    for (let i = 0; i < PROP_POOL_SIZE; i++) {
+      const sp = new PIXI.Sprite(grassTex);
+      sp.anchor.set(0.5, 0.9);
+      sp.visible = false;
+      microPropsLayer.addChild(sp);
+      propPool.push(sp);
+    }
+
+    // Fast deterministic spatial hash
+    function hash2D(x, y) {
+      let n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453123;
+      return n - Math.floor(n);
+    }
+
+    function updateProceduralFoliage(zoom) {
+      // Fade trees smoothly between 32x and 85x zoom
+      const treeAlpha = Math.max(0, Math.min(1, (zoom - 32) / 53));
+      treeLayer.alpha = treeAlpha;
+
+      if (treeAlpha <= 0.01) {
+        for (let i = 0; i < TREE_POOL_SIZE; i++) treePool[i].visible = false;
+      } else {
+        const CELL = 0.72; // World units per tree cell
+        const startX = Math.max(0, Math.floor((-world.x / zoom) / CELL) - 1);
+        const endX = Math.min(Math.floor(MAP_WIDTH / CELL), Math.ceil(((window.innerWidth - world.x) / zoom) / CELL) + 1);
+        const startY = Math.max(0, Math.floor((-world.y / zoom) / CELL) - 1);
+        const endY = Math.min(Math.floor(MAP_HEIGHT / CELL), Math.ceil(((window.innerHeight - world.y) / zoom) / CELL) + 1);
+
+        let idx = 0;
+        for (let cy = startY; cy <= endY && idx < TREE_POOL_SIZE; cy++) {
+          for (let cx = startX; cx <= endX && idx < TREE_POOL_SIZE; cx++) {
+            const h1 = hash2D(cx, cy);
+            const wx = (cx + h1 * 0.8) * CELL;
+            const wy = (cy + hash2D(cx + 13, cy + 7) * 0.8) * CELL;
+
+            // Keep camp clearing free of trees
+            if (Math.hypot(wx - CAMP_POS.x, wy - CAMP_POS.y) < 1.1) continue;
+
+            const px = Math.min(MAP_WIDTH - 1, Math.max(0, Math.floor(wx)));
+            const py = Math.min(MAP_HEIGHT - 1, Math.max(0, Math.floor(wy)));
+            const b = biomeGrid[py * MAP_WIDTH + px];
+
+            if (b <= 1 || b === 7) continue; // No trees in Ocean/Snow
+
+            // Biome-specific density
+            let chance = 0;
+            let tex = acaciaTex;
+            if (b === 5) { chance = 0.65; tex = jungleTex; }
+            else if (b === 4) { chance = 0.42; tex = (wy < 300 || wy > 720) ? pineTex : jungleTex; }
+            else if (b === 3) { chance = 0.25; tex = acaciaTex; }
+            else if (b === 2) { chance = 0.06; tex = cactusTex; }
+            else if (b === 6) { chance = 0.14; tex = pineTex; }
+
+            if (h1 < chance) {
+              const sp = treePool[idx++];
+              sp.texture = tex;
+              sp.x = wx;
+              sp.y = wy;
+              const sizeVar = 0.85 + hash2D(cx * 3, cy * 5) * 0.35;
+              sp.scale.set(0.0052 * sizeVar);
+              sp.visible = true;
+            }
+          }
+        }
+        for (let i = idx; i < TREE_POOL_SIZE; i++) treePool[i].visible = false;
+      }
+
+      // Micro props (grass tufts & boulders): fade in between 120x and 220x zoom
+      const propAlpha = Math.max(0, Math.min(1, (zoom - 120) / 100));
+      microPropsLayer.alpha = propAlpha;
+
+      if (propAlpha <= 0.01) {
+        for (let i = 0; i < PROP_POOL_SIZE; i++) propPool[i].visible = false;
+      } else {
+        const PCELL = 0.22;
+        const startX = Math.max(0, Math.floor((-world.x / zoom) / PCELL) - 1);
+        const endX = Math.min(Math.floor(MAP_WIDTH / PCELL), Math.ceil(((window.innerWidth - world.x) / zoom) / PCELL) + 1);
+        const startY = Math.max(0, Math.floor((-world.y / zoom) / PCELL) - 1);
+        const endY = Math.min(Math.floor(MAP_HEIGHT / PCELL), Math.ceil(((window.innerHeight - world.y) / zoom) / PCELL) + 1);
+
+        let idx = 0;
+        for (let cy = startY; cy <= endY && idx < PROP_POOL_SIZE; cy++) {
+          for (let cx = startX; cx <= endX && idx < PROP_POOL_SIZE; cx++) {
+            const h = hash2D(cx + 500, cy + 500);
+            if (h > 0.28) continue;
+
+            const wx = (cx + hash2D(cx, cy)) * PCELL;
+            const wy = (cy + hash2D(cx + 9, cy + 4)) * PCELL;
+
+            const px = Math.min(MAP_WIDTH - 1, Math.max(0, Math.floor(wx)));
+            const py = Math.min(MAP_HEIGHT - 1, Math.max(0, Math.floor(wy)));
+            const b = biomeGrid[py * MAP_WIDTH + px];
+            if (b <= 1) continue;
+
+            const sp = propPool[idx++];
+            sp.texture = (h < 0.08 || b === 2 || b === 6) ? rockTex : grassTex;
+            sp.x = wx;
+            sp.y = wy;
+            sp.scale.set(0.0020);
+            sp.visible = true;
+          }
+        }
+        for (let i = idx; i < PROP_POOL_SIZE; i++) propPool[i].visible = false;
+      }
+    }
+
+    // =========================================================
+    // 5. CREATE THE 300,000 BCE RIFT VALLEY CAMP
+    // =========================================================
+    const campEntities = [];
+    const smokeParticles = [];
+    let fireGraphic = new PIXI.Graphics();
+
+    function buildCamp(center) {
+      // Trampled dirt clearing circle
+      const dirt = new PIXI.Graphics();
+      dirt.beginFill(0x785636, 0.55);
+      dirt.drawCircle(center.x, center.y, 0.85);
+      dirt.beginFill(0x5c3a21, 0.45);
+      dirt.drawCircle(center.x, center.y, 0.45);
+      dirt.endFill();
+      campGroundLayer.addChild(dirt);
+
+      // 3 Hide Shelters arranged around the fire
+      const hutOffsets = [
+        { dx: -0.45, dy: -0.35 },
+        { dx: 0.48, dy: -0.25 },
+        { dx: -0.25, dy: 0.45 }
+      ];
+      hutOffsets.forEach(o => {
+        const hut = new PIXI.Sprite(hutTex);
+        hut.anchor.set(0.5, 0.85);
+        hut.x = center.x + o.dx;
+        hut.y = center.y + o.dy;
+        hut.scale.set(0.0042);
+        campLayer.addChild(hut);
+      });
+
+      // Central Campfire
+      campLayer.addChild(fireGraphic);
+
+      for (let i = 0; i < 16; i++) {
+        const p = new PIXI.Graphics();
+        p.beginFill(0xcbd5e1, 0.6);
+        p.drawRect(-0.005, -0.005, 0.012, 0.012);
+        p.endFill();
+        p.x = center.x;
+        p.y = center.y - 0.02;
+        p.alpha = Math.random();
+        p.life = Math.random();
+        smokeParticles.push(p);
+        campLayer.addChild(p);
+      }
+
+      // 16 Detailed Humans (Hunters, Gatherers, Elders)
+      const names = ["Kael", "Mara", "Orin", "Zuri", "Tark", "Sora", "Bram", "Nia", "Daro", "Luma", "Vek", "Rhea", "Kora", "Garr", "Tali", "Jor"];
+      const roles = ["Hunter", "Gatherer", "Firekeeper"];
+
+      for (let i = 0; i < 16; i++) {
+        const role = i === 0 ? "Firekeeper" : (i % 2 === 0 ? "Hunter" : "Gatherer");
+        const container = new PIXI.Container();
+
+        // Soft drop shadow
+        const shadow = new PIXI.Graphics();
+        shadow.beginFill(0x000000, 0.35);
+        shadow.drawEllipse(0, 0, 0.02, 0.008);
+        shadow.endFill();
+        container.addChild(shadow);
+
+        const tex = role === "Firekeeper" ? texElder : (role === "Hunter" ? texHunter1 : texGatherer);
+        const sp = new PIXI.Sprite(tex);
+        sp.anchor.set(0.5, 0.95);
+        sp.scale.set(0.0024);
+        container.addChild(sp);
+
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 0.1 + Math.random() * 0.65;
+        container.x = center.x + Math.cos(angle) * dist;
+        container.y = center.y + Math.sin(angle) * dist;
+
+        container.eventMode = 'static';
+        container.cursor = 'pointer';
+        const personName = names[i % names.length];
+        container.on('pointerdown', (e) => {
+          e.stopPropagation();
+          const card = document.getElementById('inspector-card');
+          card.style.display = 'block';
+          card.innerHTML = `<strong style="color:var(--accent);">${personName}</strong> (${role})<br><span style="color:#94a3b8;">Homo sapiens • 300,000 BCE<br>Status: Foraging & tending camp</span>`;
+        });
+
+        campLayer.addChild(container);
+        campEntities.push({
+          container,
+          sprite: sp,
+          role,
+          home: center,
+          targetX: container.x,
+          targetY: container.y,
+          waitTimer: Math.random() * 120,
+          animTimer: Math.random() * 10
+        });
+      }
+
+      // Grazing Gazelles nearby
+      for (let i = 0; i < 6; i++) {
+        const g = new PIXI.Sprite(gazelleTex);
+        g.anchor.set(0.5, 0.9);
+        g.scale.set(0.0022);
+        g.x = center.x + 1.2 + Math.random() * 0.9;
+        g.y = center.y - 0.5 + Math.random() * 1.0;
+        campLayer.addChild(g);
+        campEntities.push({
+          container: g,
+          sprite: g,
+          role: "Wildlife",
+          home: { x: center.x + 1.5, y: center.y },
+          targetX: g.x,
+          targetY: g.y,
+          waitTimer: Math.random() * 180,
+          animTimer: 0
+        });
+      }
+    }
+
+    buildCamp(CAMP_POS);
+
+    // Orbital Beacon
+    const beacon = new PIXI.Graphics();
+    beaconLayer.addChild(beacon);
+
+    // =========================================================
+    // 6. CAMERA, BOUNDARY CLAMPING & LOGARITHMIC DIVE
+    // =========================================================
+    function getMinZoom() {
+      return Math.max(window.innerWidth / MAP_WIDTH, window.innerHeight / MAP_HEIGHT);
+    }
+
     function clampCamera() {
       const sw = window.innerWidth;
       const sh = window.innerHeight;
@@ -273,114 +1030,95 @@
       const mw = MAP_WIDTH * curScale;
       const mh = MAP_HEIGHT * curScale;
 
-      if (mw > sw) {
-        world.x = Math.min(0, Math.max(sw - mw, world.x));
-      } else {
-        world.x = (sw - mw) / 2;
-      }
+      if (mw > sw) world.x = Math.min(0, Math.max(sw - mw, world.x));
+      else world.x = (sw - mw) / 2;
 
-      if (mh > sh) {
-        world.y = Math.min(0, Math.max(sh - mh, world.y));
-      } else {
-        world.y = (sh - mh) / 2;
-      }
+      if (mh > sh) world.y = Math.min(0, Math.max(sh - mh, world.y));
+      else world.y = (sh - mh) / 2;
     }
 
-    function getMinZoom() {
-      return Math.max(window.innerWidth / MAP_WIDTH, window.innerHeight / MAP_HEIGHT);
-    }
-
-    // 3. Texture Generators
-    function createPixelTexture(w, h, drawFn) {
-      const c = document.createElement('canvas');
-      c.width = w;
-      c.height = h;
-      const ctx = c.getContext('2d');
-      ctx.imageSmoothingEnabled = false;
-      drawFn(ctx);
-      return PIXI.Texture.from(c);
-    }
-
-    const humanTexture = createPixelTexture(16, 16, ctx => {
-      ctx.fillStyle = '#b45309'; ctx.fillRect(5, 5, 6, 6);
-      ctx.fillStyle = '#d97706'; ctx.fillRect(6, 2, 4, 4);
-      ctx.fillStyle = '#1c1917'; ctx.fillRect(6, 1, 4, 2);
-      ctx.fillStyle = '#92400e'; ctx.fillRect(5, 11, 2, 4); ctx.fillRect(9, 11, 2, 4);
-      ctx.fillStyle = '#78350f'; ctx.fillRect(12, 1, 1, 14);
-      ctx.fillStyle = '#94a3b8'; ctx.fillRect(11, 0, 3, 2);
-    });
-
-    const treeTexture = createPixelTexture(24, 24, ctx => {
-      ctx.fillStyle = '#451a03'; ctx.fillRect(11, 12, 2, 10); ctx.fillRect(9, 10, 3, 2); ctx.fillRect(12, 9, 4, 2);
-      ctx.fillStyle = '#15803d'; ctx.fillRect(4, 5, 16, 4); ctx.fillRect(2, 6, 20, 2);
-      ctx.fillStyle = '#4ade80'; ctx.fillRect(5, 5, 6, 1); ctx.fillRect(13, 5, 5, 1);
-    });
-
-    // 4. Load Earth Map
-    const earthMapUrl = 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/textures/planets/earth_atmos_2048.jpg';
-    const fallbackCanvas = document.createElement('canvas');
-    fallbackCanvas.width = MAP_WIDTH; fallbackCanvas.height = MAP_HEIGHT;
-    const fctx = fallbackCanvas.getContext('2d');
-    fctx.fillStyle = '#0f172a'; fctx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
-    const mapSprite = new PIXI.Sprite(PIXI.Texture.from(fallbackCanvas));
-    mapSprite.width = MAP_WIDTH; mapSprite.height = MAP_HEIGHT;
-    mapLayer.addChild(mapSprite);
-
-    PIXI.Assets.load(earthMapUrl).then(tex => {
-      tex.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
-      mapSprite.texture = tex;
-    });
-
-    // 5. Populate Camp
-    const fireGraphic = new PIXI.Graphics();
-    fxLayer.addChild(fireGraphic);
-
-    const smokeParticles = [];
-    for (let i = 0; i < 15; i++) {
-      const p = new PIXI.Graphics();
-      p.beginFill(0x94a3b8, 0.6); p.drawCircle(0, 0, 1.5); p.endFill();
-      p.x = CAMP_POS.x; p.y = CAMP_POS.y - 4;
-      p.vy = -0.3 - Math.random() * 0.4; p.vx = (Math.random() - 0.5) * 0.2;
-      p.alpha = Math.random();
-      smokeParticles.push(p);
-      fxLayer.addChild(p);
-    }
-
-    const humans = [];
-    function spawnHuman(x, y) {
-      const s = new PIXI.Sprite(humanTexture);
-      s.anchor.set(0.5, 0.8);
-      s.x = x + (Math.random() * 40 - 20);
-      s.y = y + (Math.random() * 40 - 20);
-      s.vx = (Math.random() - 0.5) * 0.3;
-      s.vy = (Math.random() - 0.5) * 0.3;
-      entitiesLayer.addChild(s);
-      humans.push(s);
-    }
-    for (let i = 0; i < 14; i++) spawnHuman(CAMP_POS.x, CAMP_POS.y);
-
-    for (let i = 0; i < 45; i++) {
-      const tree = new PIXI.Sprite(treeTexture);
-      tree.anchor.set(0.5, 1);
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 30 + Math.random() * 140;
-      tree.x = CAMP_POS.x + Math.cos(angle) * dist;
-      tree.y = CAMP_POS.y + Math.sin(angle) * dist;
-      foliageLayer.addChild(tree);
-    }
-
-    const beacon = new PIXI.Graphics();
-    beaconLayer.addChild(beacon);
-
-    // Initial scale & position
     world.scale.set(getMinZoom());
     clampCamera();
 
-    // 6. Camera Controls (Only active AFTER clicking Start)
-    let camera = { isLerping: false, targetX: 0, targetY: 0, targetScale: 1 };
+    // Smooth Exponential Flight Camera
+    let fly = {
+      active: false,
+      startTime: 0,
+      duration: 2400, // 2.4 sec smooth flight
+      startZoom: 1,
+      endZoom: 1,
+      startFocusX: 0,
+      startFocusY: 0,
+      endFocusX: 0,
+      endFocusY: 0
+    };
+
+    function flyTo(worldX, worldY, targetZoom, duration = 2400) {
+      const curZoom = world.scale.x;
+      const curCenterX = (window.innerWidth / 2 - world.x) / curZoom;
+      const curCenterY = (window.innerHeight / 2 - world.y) / curZoom;
+
+      fly = {
+        active: true,
+        startTime: performance.now(),
+        duration,
+        startZoom: curZoom,
+        endZoom: targetZoom,
+        startFocusX: curCenterX,
+        startFocusY: curCenterY,
+        endFocusX: worldX,
+        endFocusY: worldY
+      };
+    }
+
+    // Drag & Zoom Input
     let isDragging = false;
     let dragStart = { x: 0, y: 0 };
     let worldStart = { x: 0, y: 0 };
+
+    canvasEl.addEventListener('pointerdown', e => {
+      if (!gameStarted) return;
+      document.getElementById('inspector-card').style.display = 'none';
+      isDragging = true;
+      fly.active = false;
+      canvasEl.setPointerCapture(e.pointerId);
+      dragStart = { x: e.clientX, y: e.clientY };
+      worldStart = { x: world.x, y: world.y };
+    });
+
+    canvasEl.addEventListener('pointermove', e => {
+      if (!isDragging || !gameStarted) return;
+      world.x = worldStart.x + (e.clientX - dragStart.x);
+      world.y = worldStart.y + (e.clientY - dragStart.y);
+      clampCamera();
+    });
+
+    function stopDrag(e) {
+      if (!isDragging) return;
+      isDragging = false;
+      try { canvasEl.releasePointerCapture(e.pointerId); } catch(err) {}
+    }
+    canvasEl.addEventListener('pointerup', stopDrag);
+    canvasEl.addEventListener('pointercancel', stopDrag);
+
+    canvasEl.addEventListener('wheel', e => {
+      if (!gameStarted) return;
+      e.preventDefault();
+      fly.active = false;
+
+      const factor = e.deltaY < 0 ? 1.22 : 0.82;
+      const minZ = getMinZoom();
+      const newScale = Math.min(Math.max(world.scale.x * factor, minZ), MAX_ZOOM);
+
+      const mx = e.clientX, my = e.clientY;
+      const wx = (mx - world.x) / world.scale.x;
+      const wy = (my - world.y) / world.scale.y;
+
+      world.scale.set(newScale);
+      world.x = mx - wx * newScale;
+      world.y = my - wy * newScale;
+      clampCamera();
+    }, { passive: false });
 
     window.addEventListener('resize', () => {
       const minZ = getMinZoom();
@@ -388,206 +1126,232 @@
       clampCamera();
     });
 
-    // Pointer events tied strictly to the CANVAS (cannot hijack buttons)
-    canvasElement.addEventListener('pointerdown', e => {
-      if (!gameStarted) return; // Ignore drag clicks if modal is up
-      isDragging = true;
-      camera.isLerping = false;
-      canvasElement.setPointerCapture(e.pointerId);
-      dragStart = { x: e.clientX, y: e.clientY };
-      worldStart = { x: world.x, y: world.y };
-    });
-
-    canvasElement.addEventListener('pointermove', e => {
-      if (!isDragging || !gameStarted) return;
-      world.x = worldStart.x + (e.clientX - dragStart.x);
-      world.y = worldStart.y + (e.clientY - dragStart.y);
-      clampCamera();
-    });
-
-    function endDrag(e) {
-      if (!isDragging) return;
-      isDragging = false;
-      try { canvasElement.releasePointerCapture(e.pointerId); } catch(err) {}
-    }
-    canvasElement.addEventListener('pointerup', endDrag);
-    canvasElement.addEventListener('pointercancel', endDrag);
-
-    // Wheel Zoom
-    canvasElement.addEventListener('wheel', e => {
-      if (!gameStarted) return;
-      e.preventDefault();
-      camera.isLerping = false;
-
-      const zoomFactor = e.deltaY < 0 ? 1.25 : 0.8;
-      const minZ = getMinZoom();
-      const newScale = Math.min(Math.max(world.scale.x * zoomFactor, minZ), 32.0);
-
-      const mouseX = e.clientX;
-      const mouseY = e.clientY;
-
-      const worldPos = {
-        x: (mouseX - world.x) / world.scale.x,
-        y: (mouseY - world.y) / world.scale.y
-      };
-
-      world.scale.set(newScale);
-      world.x = mouseX - worldPos.x * newScale;
-      world.y = mouseY - worldPos.y * newScale;
-      clampCamera();
-
-      document.getElementById('zoom-text').innerText = newScale.toFixed(1) + 'x';
-    }, { passive: false });
-
-    // Focus Helper
-    function focusOnCamp(targetZoom = 18.0) {
-      camera.isLerping = true;
-      camera.targetScale = targetZoom;
-      camera.targetX = window.innerWidth / 2 - (CAMP_POS.x * targetZoom);
-      camera.targetY = window.innerHeight / 2 - (CAMP_POS.y * targetZoom);
-    }
-
-    // 7. Intro Button Hookup
+    // =========================================================
+    // 7. UI & TIMELINE LOGIC
+    // =========================================================
     document.getElementById('start-btn').addEventListener('click', () => {
       gameStarted = true;
       const modal = document.getElementById('intro-modal');
       modal.style.opacity = '0';
-      setTimeout(() => {
-        modal.style.display = 'none'; // Completely removes modal & blur
-      }, 500);
-
-      focusOnCamp(16.0); // Smooth dive from orbit into East Africa
+      setTimeout(() => modal.style.display = 'none', 600);
+      flyTo(CAMP_POS.x, CAMP_POS.y, 420.0, 2600);
     });
 
-    // 8. Milestones & Chronos Leap Logic
+    document.getElementById('btn-orbit').addEventListener('click', () => {
+      flyTo(MAP_WIDTH / 2, MAP_HEIGHT / 2, getMinZoom(), 1600);
+    });
+
+    document.getElementById('btn-camp').addEventListener('click', () => {
+      flyTo(CAMP_POS.x, CAMP_POS.y, 420.0, 1800);
+    });
+
     let currentYear = 300000;
+    let timeSpeed = 1;
     let milestones = { 1: false, 2: false, 3: false };
 
-    function checkMilestoneUnlock() {
-      const allDone = milestones[1] && milestones[2] && milestones[3];
-      const leapBtn = document.getElementById('leap-btn');
-      if (allDone) {
-        leapBtn.classList.add('unlocked');
-        leapBtn.innerText = "⚡ CHRONOS LEAP READY!";
-      } else {
-        leapBtn.classList.remove('unlocked');
-        leapBtn.innerText = "⚡ CHRONOS LEAP";
-      }
+    function setSpeed(sp) {
+      timeSpeed = sp;
+      document.getElementById('sp-0').classList.toggle('active', sp === 0);
+      document.getElementById('sp-1').classList.toggle('active', sp === 1);
+      document.getElementById('sp-5').classList.toggle('active', sp === 5);
+    }
+    document.getElementById('sp-0').onclick = () => setSpeed(0);
+    document.getElementById('sp-1').onclick = () => setSpeed(1);
+    document.getElementById('sp-5').onclick = () => setSpeed(5);
+
+    function checkUnlock() {
+      const done = milestones[1] && milestones[2] && milestones[3];
+      const btn = document.getElementById('leap-btn');
+      btn.classList.toggle('unlocked', done);
+      btn.innerText = done ? "⚡ CHRONOS LEAP READY!" : "⚡ CHRONOS LEAP";
     }
 
-    document.getElementById('m1').addEventListener('click', function() {
-      milestones[1] = !milestones[1];
-      this.classList.toggle('completed', milestones[1]);
-      checkMilestoneUnlock();
-    });
-
-    document.getElementById('m2').addEventListener('click', function() {
-      milestones[2] = !milestones[2];
-      this.classList.toggle('completed', milestones[2]);
-      checkMilestoneUnlock();
-    });
-
-    document.getElementById('m3').addEventListener('click', function() {
-      milestones[3] = !milestones[3];
-      this.classList.toggle('completed', milestones[3]);
-      checkMilestoneUnlock();
+    ['m1', 'm2', 'm3'].forEach((id, idx) => {
+      document.getElementById(id).addEventListener('click', function() {
+        const key = idx + 1;
+        milestones[key] = !milestones[key];
+        this.classList.toggle('completed', milestones[key]);
+        checkUnlock();
+      });
     });
 
     document.getElementById('leap-btn').addEventListener('click', function() {
-      const allDone = milestones[1] && milestones[2] && milestones[3];
-      if (!allDone) {
-        alert("Click and complete all 3 Era Goals in the bottom bar first!");
+      if (!(milestones[1] && milestones[2] && milestones[3])) {
+        alert("Complete all 3 Era Goals on the bottom left first!");
         return;
       }
-
       currentYear = 70000;
       document.getElementById('year-label').innerText = "70,000 BCE";
       document.getElementById('era-label').innerText = "THE COASTAL MIGRATION";
-      document.getElementById('pop-label').innerText = "45,000";
+      document.getElementById('pop-label').innerText = "48,000";
 
-      // Spawn second human camp across the Red Sea into Arabia
-      const redSeaPos = { x: CAMP_POS.x + 80, y: CAMP_POS.y - 120 };
-      for (let i = 0; i < 15; i++) spawnHuman(redSeaPos.x, redSeaPos.y);
+      // Spawn a second camp in the Levant / Arabia
+      const arabiaPos = { x: CAMP_POS.x + 35, y: CAMP_POS.y - 90 };
+      buildCamp(arabiaPos);
+      flyTo(arabiaPos.x, arabiaPos.y, 400.0, 2200);
 
-      alert("⚡ CHRONOS LEAP! Advanced to 70,000 BCE.\nHumans have crossed the Red Sea into Arabia and the Levant!");
-
-      // Reset for next era
       milestones = { 1: false, 2: false, 3: false };
-      const m1 = document.getElementById('m1');
-      const m2 = document.getElementById('m2');
-      const m3 = document.getElementById('m3');
-      m1.className = 'milestone-btn'; m1.innerHTML = '<span>🏹</span> Composite Bows';
-      m2.className = 'milestone-btn'; m2.innerHTML = '<span>🛶</span> Coastal Rafts';
-      m3.className = 'milestone-btn'; m3.innerHTML = '<span>🎨</span> Cave Art Traditions';
-      this.classList.remove('unlocked');
-      this.innerText = "⚡ CHRONOS LEAP";
+      document.getElementById('m1').className = 'milestone-btn';
+      document.getElementById('m1').innerText = '🏹 Composite Bows';
+      document.getElementById('m2').className = 'milestone-btn';
+      document.getElementById('m2').innerText = '🛶 Coastal Rafts';
+      document.getElementById('m3').className = 'milestone-btn';
+      document.getElementById('m3').innerText = '🎨 Cave Painting';
+      checkUnlock();
     });
 
-    // 9. Main Render Loop
+    // Intervene Modal
+    document.getElementById('btn-intervene').onclick = () => {
+      document.getElementById('intervention-modal').style.display = 'flex';
+    };
+    document.getElementById('close-intervene').onclick = () => {
+      document.getElementById('intervention-modal').style.display = 'none';
+    };
+    document.getElementById('submit-intervene').onclick = () => {
+      const val = document.getElementById('intervene-input').value.trim();
+      if (!val) return;
+      alert(`Intervention Logged: "${val}"\n(Next step: Connect this to the Gemini API route to dynamically mutate biomes & species!)`);
+      document.getElementById('intervene-input').value = '';
+      document.getElementById('intervention-modal').style.display = 'none';
+    };
+
+    // =========================================================
+    // 8. MAIN RENDER & SIMULATION LOOP
+    // =========================================================
     let ticker = 0;
     app.ticker.add(() => {
       ticker += 0.05;
 
-      // Pass time slowly once game is started
-      if (gameStarted && currentYear > 10000) {
-        currentYear -= 1;
-        document.getElementById('year-label').innerText = currentYear.toLocaleString() + ' BCE';
-      }
-
-      // Smooth Camera LERP
-      if (camera.isLerping) {
-        world.x += (camera.targetX - world.x) * 0.06;
-        world.y += (camera.targetY - world.y) * 0.06;
-        const currentScale = world.scale.x;
-        const nextScale = currentScale + (camera.targetScale - currentScale) * 0.06;
-        world.scale.set(nextScale);
-        clampCamera();
-        document.getElementById('zoom-text').innerText = nextScale.toFixed(1) + 'x';
-
-        if (Math.abs(camera.targetScale - nextScale) < 0.01) {
-          camera.isLerping = false;
+      // Time Passage
+      if (gameStarted && timeSpeed > 0 && currentYear > 1000) {
+        if (Math.floor(ticker * 10) % 4 === 0) {
+          currentYear = Math.max(1000, currentYear - timeSpeed);
+          document.getElementById('year-label').innerText = currentYear.toLocaleString() + ' BCE';
         }
       }
 
-      const currentZoom = world.scale.x;
-      const showMicroDetail = currentZoom >= 3.5;
-      foliageLayer.visible = showMicroDetail;
-      entitiesLayer.visible = showMicroDetail;
-      fxLayer.visible = showMicroDetail;
+      // Exponential Camera Dive
+      if (fly.active) {
+        const now = performance.now();
+        let t = Math.min(1, (now - fly.startTime) / fly.duration);
+        // Smooth easeInOutCubic
+        const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
-      // Orbit Beacon
+        // Logarithmic zoom interpolation feels natural from 1x to 450x!
+        const logZ = Math.log(fly.startZoom) + (Math.log(fly.endZoom) - Math.log(fly.startZoom)) * ease;
+        const curZ = Math.exp(logZ);
+
+        const fx = fly.startFocusX + (fly.endFocusX - fly.startFocusX) * ease;
+        const fy = fly.startFocusY + (fly.endFocusY - fly.startFocusY) * ease;
+
+        world.scale.set(curZ);
+        world.x = window.innerWidth / 2 - fx * curZ;
+        world.y = window.innerHeight / 2 - fy * curZ;
+        clampCamera();
+
+        if (t >= 1) fly.active = false;
+      }
+
+      const zoom = world.scale.x;
+      document.getElementById('zoom-text').innerText = zoom.toFixed(1) + 'x';
+
+      // Altitude HUD text
+      let alt = "Orbit";
+      if (zoom > 300) alt = "Camp Ground (Micro)";
+      else if (zoom > 100) alt = "Local Savanna";
+      else if (zoom > 30) alt = "Regional Valley";
+      else if (zoom > 5) alt = "Continental";
+      document.getElementById('altitude-label').innerText = `Altitude: ${alt}`;
+
+      // Smooth Cross-Fade of Ground Resolution & Foliage
+      // 1. Fade out blocky Earth pixels between 18x and 45x so terrain becomes smooth & grassy
+      mapPixelLayer.alpha = 1 - Math.max(0, Math.min(1, (zoom - 18) / 27));
+      // 2. Fade in crisp micro-pixel ground tiles between 45x and 140x
+      microGroundTiling.alpha = Math.max(0, Math.min(0.85, (zoom - 45) / 95));
+
+      // 3. Fade in procedural trees & props
+      updateProceduralFoliage(zoom);
+
+      // 4. Fade in Camp & Humans smoothly between 90x and 210x
+      const campAlpha = Math.max(0, Math.min(1, (zoom - 90) / 120));
+      campLayer.alpha = campAlpha;
+      campGroundLayer.alpha = campAlpha;
+      campLayer.visible = campAlpha > 0.01;
+      campGroundLayer.visible = campAlpha > 0.01;
+
+      // 5. Orbit Beacon (fades out completely once trees start appearing)
       beacon.clear();
-      if (!showMicroDetail) {
-        const pulse = Math.sin(ticker * 2) * 2;
-        beacon.beginFill(0xfbbf24, 0.4);
-        beacon.drawCircle(CAMP_POS.x, CAMP_POS.y, 8 + pulse);
-        beacon.beginFill(0x38bdf8, 1);
-        beacon.drawCircle(CAMP_POS.x, CAMP_POS.y, 3);
+      const beaconAlpha = 1 - Math.max(0, Math.min(1, (zoom - 10) / 25));
+      if (beaconAlpha > 0.02) {
+        const pulse = Math.sin(ticker * 2) * 1.5;
+        const r = Math.max(1.5, (8 + pulse) / Math.sqrt(zoom));
+        beacon.beginFill(0xfbbf24, 0.35 * beaconAlpha);
+        beacon.drawCircle(CAMP_POS.x, CAMP_POS.y, r);
+        beacon.beginFill(0x38bdf8, beaconAlpha);
+        beacon.drawCircle(CAMP_POS.x, CAMP_POS.y, r * 0.4);
         beacon.endFill();
       }
 
-      // Ground Level Animations
-      if (showMicroDetail) {
+      // 6. Animate Camp, Fire, Smoke, and Walking People (Only when visible)
+      if (campLayer.visible) {
+        // Campfire stones & flickering flames
         fireGraphic.clear();
+        fireGraphic.beginFill(0x475569);
+        fireGraphic.drawCircle(CAMP_POS.x, CAMP_POS.y, 0.032);
         fireGraphic.beginFill(0xf97316);
-        fireGraphic.drawRect(CAMP_POS.x - 2, CAMP_POS.y - 2, 4 + Math.sin(ticker * 5), 4 + Math.cos(ticker * 5));
+        const fSize = 0.018 + Math.sin(ticker * 6) * 0.004;
+        fireGraphic.drawRect(CAMP_POS.x - fSize/2, CAMP_POS.y - fSize, fSize, fSize * 1.4);
         fireGraphic.beginFill(0xfef08a);
-        fireGraphic.drawRect(CAMP_POS.x - 1, CAMP_POS.y - 1, 2, 2);
+        fireGraphic.drawRect(CAMP_POS.x - 0.006, CAMP_POS.y - 0.012, 0.012, 0.012);
         fireGraphic.endFill();
 
+        // Rising smoke pixels
         smokeParticles.forEach(p => {
-          p.y += p.vy; p.x += p.vx; p.alpha -= 0.008;
-          if (p.alpha <= 0) {
-            p.x = CAMP_POS.x + (Math.random() - 0.5) * 2;
-            p.y = CAMP_POS.y - 3;
-            p.alpha = 0.7;
+          p.life -= 0.01;
+          p.y -= 0.0025;
+          p.x += Math.sin(ticker + p.life * 5) * 0.0005;
+          p.alpha = p.life * 0.6;
+          if (p.life <= 0) {
+            p.x = CAMP_POS.x + (Math.random() - 0.5) * 0.015;
+            p.y = CAMP_POS.y - 0.015;
+            p.life = 1.0;
           }
         });
 
-        humans.forEach(h => {
-          h.x += h.vx; h.y += h.vy;
-          if (Math.hypot(h.x - CAMP_POS.x, h.y - CAMP_POS.y) > 50) {
-            h.vx *= -1; h.vy *= -1;
+        // Autonomous AI wandering & 2-frame walk animation
+        const spd = timeSpeed === 0 ? 0 : (timeSpeed === 5 ? 0.0045 : 0.0018);
+        campEntities.forEach(ent => {
+          if (spd === 0) return;
+
+          if (ent.waitTimer > 0) {
+            ent.waitTimer--;
+            return;
+          }
+
+          const dx = ent.targetX - ent.container.x;
+          const dy = ent.targetY - ent.container.y;
+          const dist = Math.hypot(dx, dy);
+
+          if (dist < 0.02) {
+            // Pick a new nearby destination
+            ent.waitTimer = 60 + Math.random() * 160;
+            const ang = Math.random() * Math.PI * 2;
+            const rad = ent.role === "Firekeeper" ? (0.06 + Math.random() * 0.12) : (0.08 + Math.random() * 0.65);
+            ent.targetX = ent.home.x + Math.cos(ang) * rad;
+            ent.targetY = ent.home.y + Math.sin(ang) * rad;
+          } else {
+            ent.container.x += (dx / dist) * spd;
+            ent.container.y += (dy / dist) * spd;
+
+            // Face walking direction
+            const baseScale = Math.abs(ent.sprite.scale.x);
+            ent.sprite.scale.x = dx < 0 ? -baseScale : baseScale;
+
+            // Walk frame animation for Hunters
+            if (ent.role === "Hunter") {
+              ent.animTimer += 0.25;
+              ent.sprite.texture = (Math.floor(ent.animTimer) % 2 === 0) ? texHunter1 : texHunter2;
+            }
           }
         });
       }
