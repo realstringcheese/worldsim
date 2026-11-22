@@ -9,7 +9,7 @@
   <style>
     :root {
       --bg: #030712;
-      --panel: rgba(15, 23, 42, 0.92);
+      --panel: rgba(15, 23, 42, 0.95);
       --border: #334155;
       --accent: #38bdf8;
       --gold: #fbbf24;
@@ -29,28 +29,31 @@
     #canvas-container {
       position: absolute;
       inset: 0;
+      z-index: 1;
+    }
+    #canvas-container canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
       cursor: grab;
     }
-    #canvas-container:active { cursor: grabbing; }
+    #canvas-container canvas:active { cursor: grabbing; }
 
-    /* HUD */
-    .ui-layer {
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-    }
+    /* Top HUD */
     .top-hud {
-      position: absolute;
+      position: fixed;
       top: 16px;
       left: 20px;
       right: 20px;
       display: flex;
       justify-content: space-between;
       gap: 12px;
+      z-index: 50;
+      pointer-events: none;
     }
     .hud-card {
       background: var(--panel);
-      backdrop-filter: blur(10px);
+      backdrop-filter: blur(8px);
       border: 1px solid var(--border);
       padding: 12px 20px;
       border-radius: 10px;
@@ -64,11 +67,11 @@
       color: var(--accent);
       font-weight: 700;
     }
-    .year-display { font-size: 1.6rem; font-weight: 800; font-family: monospace; }
+    .year-display { font-size: 1.5rem; font-weight: 800; font-family: monospace; }
 
     /* Bottom Timeline Bar */
     .bottom-bar {
-      position: absolute;
+      position: fixed;
       bottom: 20px;
       left: 20px;
       right: 20px;
@@ -78,16 +81,11 @@
       border-radius: 14px;
       padding: 16px 24px;
       display: flex;
-      flex-direction: column;
-      gap: 14px;
-      pointer-events: auto;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-    }
-    .timeline-row {
-      display: flex;
       justify-content: space-between;
       align-items: center;
       gap: 16px;
+      z-index: 50;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
     }
     .milestones-group {
       display: flex;
@@ -99,13 +97,13 @@
       background: #1e293b;
       color: #94a3b8;
       border: 1px solid #334155;
-      padding: 8px 14px;
+      padding: 10px 16px;
       border-radius: 8px;
       font-size: 0.85rem;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       transition: all 0.2s;
     }
     .milestone-btn:hover { border-color: var(--accent); color: #fff; }
@@ -113,6 +111,7 @@
       background: rgba(34, 197, 94, 0.15);
       border-color: var(--green);
       color: var(--green);
+      font-weight: 700;
     }
 
     .action-group {
@@ -120,23 +119,11 @@
       gap: 10px;
       align-items: center;
     }
-    .btn-speed {
-      background: #1e293b;
-      color: #cbd5e1;
-      border: 1px solid #334155;
-      padding: 8px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 0.8rem;
-      font-weight: bold;
-    }
-    .btn-speed.active { background: var(--accent); color: #04101e; border-color: var(--accent); }
-
     .btn-leap {
       background: #334155;
       color: #64748b;
       border: none;
-      padding: 10px 22px;
+      padding: 12px 24px;
       border-radius: 8px;
       font-weight: 800;
       font-size: 0.95rem;
@@ -157,143 +144,91 @@
       100% { transform: scale(1); }
     }
 
-    /* Start Overlay */
+    /* Intro Overlay - Isolated with Highest Z-Index */
     #intro-modal {
-      position: absolute;
+      position: fixed;
       inset: 0;
-      background: rgba(3, 7, 18, 0.85);
-      backdrop-filter: blur(8px);
+      background: rgba(3, 7, 18, 0.9);
+      backdrop-filter: blur(10px);
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
-      z-index: 100;
-      transition: opacity 0.6s ease;
+      z-index: 9999;
       text-align: center;
       padding: 20px;
+      transition: opacity 0.5s ease;
     }
     #intro-modal h1 {
       font-size: 3.5rem;
       letter-spacing: 4px;
       margin-bottom: 8px;
-      text-shadow: 0 0 30px rgba(56, 189, 248, 0.4);
+      text-shadow: 0 0 30px rgba(56, 189, 248, 0.5);
     }
-    #intro-modal p { color: #94a3b8; max-width: 500px; line-height: 1.6; margin-bottom: 24px; }
+    #intro-modal p { color: #94a3b8; max-width: 500px; line-height: 1.6; margin-bottom: 28px; }
     .btn-start {
       background: var(--accent);
       color: #030712;
       border: none;
-      padding: 14px 38px;
-      font-size: 1.1rem;
+      padding: 16px 42px;
+      font-size: 1.15rem;
       font-weight: 800;
       border-radius: 8px;
       cursor: pointer;
-      box-shadow: 0 0 25px rgba(56, 189, 248, 0.5);
-      transition: transform 0.2s;
+      box-shadow: 0 0 25px rgba(56, 189, 248, 0.6);
+      transition: transform 0.2s, background 0.2s;
     }
-    .btn-start:hover { transform: scale(1.05); }
-
-    /* Custom Intervention Modal */
-    #intervention-modal {
-      position: absolute;
-      inset: 0;
-      background: rgba(3, 7, 18, 0.7);
-      backdrop-filter: blur(6px);
-      display: none;
-      justify-content: center;
-      align-items: center;
-      z-index: 90;
-      pointer-events: auto;
-    }
-    .intervention-box {
-      background: var(--panel);
-      border: 1px solid var(--accent);
-      padding: 24px;
-      border-radius: 12px;
-      max-width: 500px;
-      width: 90%;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-    .intervention-box input {
-      background: #0f172a;
-      border: 1px solid #334155;
-      padding: 12px;
-      border-radius: 8px;
-      color: #fff;
-      font-size: 1rem;
-      outline: none;
-    }
+    .btn-start:hover { transform: scale(1.06); background: #7dd3fc; }
   </style>
 </head>
 <body>
 
+  <!-- Game Canvas Container -->
   <div id="canvas-container"></div>
 
-  <div class="ui-layer">
-    <!-- Top HUD -->
-    <div class="top-hud">
-      <div class="hud-card">
-        <div class="era-badge" id="era-label">PALEOLITHIC DAWN</div>
-        <div class="year-display" id="year-label">300,000 BCE</div>
-      </div>
-      <div class="hud-card" style="text-align: right;">
-        <div style="font-size: 0.8rem; color: #94a3b8;">GLOBAL HOMINIDS</div>
-        <div style="font-weight: 800; color: #f8fafc; font-size: 1.2rem;" id="pop-label">1,500</div>
-        <div style="font-size: 0.8rem; color: var(--gold); margin-top: 4px;">Zoom: <span id="zoom-text">1.0x</span></div>
-      </div>
+  <!-- Intro Modal (Active on load) -->
+  <div id="intro-modal">
+    <h1>CHRONOS</h1>
+    <p>A living 8-bit simulation of Earth's true geography. The camera is locked to planetary bounds—zoom and pan freely.</p>
+    <button class="btn-start" id="start-btn">ENTER 300,000 BCE</button>
+  </div>
+
+  <!-- Top HUD -->
+  <div class="top-hud">
+    <div class="hud-card">
+      <div class="era-badge" id="era-label">PALEOLITHIC DAWN</div>
+      <div class="year-display" id="year-label">300,000 BCE</div>
+    </div>
+    <div class="hud-card" style="text-align: right;">
+      <div style="font-size: 0.8rem; color: #94a3b8;">GLOBAL POPULATION</div>
+      <div style="font-weight: 800; color: #f8fafc; font-size: 1.3rem;" id="pop-label">1,500</div>
+      <div style="font-size: 0.8rem; color: var(--gold); margin-top: 4px;">Zoom: <span id="zoom-text">1.0x</span></div>
+    </div>
+  </div>
+
+  <!-- Bottom Interactive Timeline -->
+  <div class="bottom-bar">
+    <div class="milestones-group">
+      <span style="font-size: 0.85rem; font-weight: bold; color: #cbd5e1;">Era Goals:</span>
+      <button class="milestone-btn" id="m1">
+        <span>🔥</span> Harness Controlled Fire
+      </button>
+      <button class="milestone-btn" id="m2">
+        <span>🪓</span> Acheulean Handaxes
+      </button>
+      <button class="milestone-btn" id="m3">
+        <span>🗣️</span> Form Clan Language
+      </button>
     </div>
 
-    <!-- Bottom Interactive Timeline -->
-    <div class="bottom-bar">
-      <div class="timeline-row">
-        <div class="milestones-group">
-          <span style="font-size: 0.85rem; font-weight: bold; color: #cbd5e1;">Era Goals:</span>
-          <button class="milestone-btn" id="m1" onclick="toggleMilestone(1)">
-            <span>🔥</span> Harness Controlled Fire
-          </button>
-          <button class="milestone-btn" id="m2" onclick="toggleMilestone(2)">
-            <span>🪓</span> Acheulean Handaxes
-          </button>
-          <button class="milestone-btn" id="m3" onclick="toggleMilestone(3)">
-            <span>🗣️</span> Form Clan Language
-          </button>
-        </div>
-
-        <div class="action-group">
-          <button class="btn-speed" id="sp-1" onclick="setSpeed(1)">1x</button>
-          <button class="btn-speed" id="sp-5" onclick="setSpeed(5)">5x</button>
-          <button class="milestone-btn" onclick="openIntervene()" style="border-color: var(--accent); color: var(--accent);">
-            ⚡ Intervene
-          </button>
-          <button class="btn-leap" id="leap-btn" onclick="chronosLeap()">⚡ CHRONOS LEAP</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Start Overlay -->
-    <div id="intro-modal">
-      <h1>CHRONOS</h1>
-      <p>A living 8-bit simulation of Earth's true geography. The camera is locked to planetary bounds—zoom and pan freely.</p>
-      <button class="btn-start" onclick="beginSimulation()">ENTER 300,000 BCE</button>
-    </div>
-
-    <!-- Intervene Modal -->
-    <div id="intervention-modal">
-      <div class="intervention-box">
-        <h3>Alter the Course of History</h3>
-        <p style="font-size: 0.85rem; color: #94a3b8;">Describe a divine or evolutionary intervention for this era:</p>
-        <input type="text" id="intervene-input" placeholder="e.g. Breed giant wolves for early transport...">
-        <div style="display: flex; justify-content: flex-end; gap: 8px;">
-          <button class="btn-speed" onclick="closeIntervene()">Cancel</button>
-          <button class="btn-start" style="padding: 10px 18px; font-size: 0.9rem;" onclick="applyIntervention()">Enact Intervention</button>
-        </div>
-      </div>
+    <div class="action-group">
+      <button class="btn-leap" id="leap-btn">⚡ CHRONOS LEAP</button>
     </div>
   </div>
 
   <script>
+    let gameStarted = false;
+
     // 1. Initialize PixiJS WebGL Renderer
     PIXI.BaseTexture.defaultOptions.scaleMode = PIXI.SCALE_MODES.NEAREST;
 
@@ -304,13 +239,15 @@
       resolution: window.devicePixelRatio || 1,
       autoDensity: true
     });
-    document.getElementById('canvas-container').appendChild(app.view);
+    
+    const canvasElement = app.view;
+    document.getElementById('canvas-container').appendChild(canvasElement);
 
-    // Geographic Dimensions
+    // Map Dimensions
     const MAP_WIDTH = 2048;
     const MAP_HEIGHT = 1024;
 
-    // East African Rift Valley
+    // East African Rift Valley Coordinates
     const CAMP_POS = {
       x: Math.round(((36 + 180) / 360) * MAP_WIDTH),     // ~1229 px
       y: Math.round(((90 - (-3)) / 180) * MAP_HEIGHT)    // ~529 px
@@ -328,7 +265,7 @@
     const beaconLayer = new PIXI.Container();
     world.addChild(mapLayer, foliageLayer, entitiesLayer, fxLayer, beaconLayer);
 
-    // 2. Clamp Camera to Prevent Void Dragging
+    // 2. Camera Clamping (Prevents moving into grey void)
     function clampCamera() {
       const sw = window.innerWidth;
       const sh = window.innerHeight;
@@ -336,22 +273,24 @@
       const mw = MAP_WIDTH * curScale;
       const mh = MAP_HEIGHT * curScale;
 
-      // X Boundaries
       if (mw > sw) {
         world.x = Math.min(0, Math.max(sw - mw, world.x));
       } else {
-        world.x = (sw - mw) / 2; // Center horizontally if smaller than screen
+        world.x = (sw - mw) / 2;
       }
 
-      // Y Boundaries
       if (mh > sh) {
         world.y = Math.min(0, Math.max(sh - mh, world.y));
       } else {
-        world.y = (sh - mh) / 2; // Center vertically if smaller than screen
+        world.y = (sh - mh) / 2;
       }
     }
 
-    // 3. Pixel Texture Generators
+    function getMinZoom() {
+      return Math.max(window.innerWidth / MAP_WIDTH, window.innerHeight / MAP_HEIGHT);
+    }
+
+    // 3. Texture Generators
     function createPixelTexture(w, h, drawFn) {
       const c = document.createElement('canvas');
       c.width = w;
@@ -377,12 +316,7 @@
       ctx.fillStyle = '#4ade80'; ctx.fillRect(5, 5, 6, 1); ctx.fillRect(13, 5, 5, 1);
     });
 
-    const animalTexture = createPixelTexture(10, 8, ctx => {
-      ctx.fillStyle = '#d97706'; ctx.fillRect(2, 2, 6, 3); ctx.fillRect(7, 0, 2, 3);
-      ctx.fillStyle = '#78350f'; ctx.fillRect(2, 5, 1, 3); ctx.fillRect(7, 5, 1, 3);
-    });
-
-    // 4. Load Real Earth Map
+    // 4. Load Earth Map
     const earthMapUrl = 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/textures/planets/earth_atmos_2048.jpg';
     const fallbackCanvas = document.createElement('canvas');
     fallbackCanvas.width = MAP_WIDTH; fallbackCanvas.height = MAP_HEIGHT;
@@ -435,60 +369,53 @@
       foliageLayer.addChild(tree);
     }
 
-    const animals = [];
-    for (let i = 0; i < 8; i++) {
-      const a = new PIXI.Sprite(animalTexture);
-      a.anchor.set(0.5, 0.8);
-      a.x = CAMP_POS.x + 80 + Math.random() * 80;
-      a.y = CAMP_POS.y - 40 + Math.random() * 80;
-      a.vx = (Math.random() - 0.5) * 0.2; a.vy = (Math.random() - 0.5) * 0.2;
-      entitiesLayer.addChild(a);
-      animals.push(a);
-    }
-
     const beacon = new PIXI.Graphics();
     beaconLayer.addChild(beacon);
 
-    // Initial Minimum Scale to Fill Screen
-    function getMinZoom() {
-      return Math.max(window.innerWidth / MAP_WIDTH, window.innerHeight / MAP_HEIGHT);
-    }
-
-    let minScale = getMinZoom();
-    world.scale.set(minScale);
+    // Initial scale & position
+    world.scale.set(getMinZoom());
     clampCamera();
 
-    // 6. Navigation & Clamped Dragging
+    // 6. Camera Controls (Only active AFTER clicking Start)
     let camera = { isLerping: false, targetX: 0, targetY: 0, targetScale: 1 };
     let isDragging = false;
     let dragStart = { x: 0, y: 0 };
     let worldStart = { x: 0, y: 0 };
 
     window.addEventListener('resize', () => {
-      minScale = getMinZoom();
-      if (world.scale.x < minScale) world.scale.set(minScale);
+      const minZ = getMinZoom();
+      if (world.scale.x < minZ) world.scale.set(minZ);
       clampCamera();
     });
 
-    window.addEventListener('pointerdown', e => {
-      if (e.target.closest('.ui-layer') || e.target.closest('.bottom-bar')) return;
+    // Pointer events tied strictly to the CANVAS (cannot hijack buttons)
+    canvasElement.addEventListener('pointerdown', e => {
+      if (!gameStarted) return; // Ignore drag clicks if modal is up
       isDragging = true;
       camera.isLerping = false;
+      canvasElement.setPointerCapture(e.pointerId);
       dragStart = { x: e.clientX, y: e.clientY };
       worldStart = { x: world.x, y: world.y };
     });
 
-    window.addEventListener('pointermove', e => {
-      if (!isDragging) return;
+    canvasElement.addEventListener('pointermove', e => {
+      if (!isDragging || !gameStarted) return;
       world.x = worldStart.x + (e.clientX - dragStart.x);
       world.y = worldStart.y + (e.clientY - dragStart.y);
-      clampCamera(); // Ensures map can NEVER leave screen bounds
+      clampCamera();
     });
 
-    window.addEventListener('pointerup', () => isDragging = false);
+    function endDrag(e) {
+      if (!isDragging) return;
+      isDragging = false;
+      try { canvasElement.releasePointerCapture(e.pointerId); } catch(err) {}
+    }
+    canvasElement.addEventListener('pointerup', endDrag);
+    canvasElement.addEventListener('pointercancel', endDrag);
 
-    // Clamped Zoom
-    window.addEventListener('wheel', e => {
+    // Wheel Zoom
+    canvasElement.addEventListener('wheel', e => {
+      if (!gameStarted) return;
       e.preventDefault();
       camera.isLerping = false;
 
@@ -512,7 +439,7 @@
       document.getElementById('zoom-text').innerText = newScale.toFixed(1) + 'x';
     }, { passive: false });
 
-    // Focus Camera Function
+    // Focus Helper
     function focusOnCamp(targetZoom = 18.0) {
       camera.isLerping = true;
       camera.targetScale = targetZoom;
@@ -520,30 +447,23 @@
       camera.targetY = window.innerHeight / 2 - (CAMP_POS.y * targetZoom);
     }
 
-    function beginSimulation() {
+    // 7. Intro Button Hookup
+    document.getElementById('start-btn').addEventListener('click', () => {
+      gameStarted = true;
       const modal = document.getElementById('intro-modal');
       modal.style.opacity = '0';
-      setTimeout(() => modal.style.display = 'none', 600);
-      focusOnCamp(16.0);
-    }
+      setTimeout(() => {
+        modal.style.display = 'none'; // Completely removes modal & blur
+      }, 500);
 
-    // 7. Interactive Timeline & Milestones Logic
+      focusOnCamp(16.0); // Smooth dive from orbit into East Africa
+    });
+
+    // 8. Milestones & Chronos Leap Logic
     let currentYear = 300000;
-    let timeSpeed = 1;
     let milestones = { 1: false, 2: false, 3: false };
 
-    function setSpeed(sp) {
-      timeSpeed = sp;
-      document.getElementById('sp-1').classList.toggle('active', sp === 1);
-      document.getElementById('sp-5').classList.toggle('active', sp === 5);
-    }
-
-    function toggleMilestone(num) {
-      milestones[num] = !milestones[num];
-      const btn = document.getElementById(`m${num}`);
-      btn.classList.toggle('completed', milestones[num]);
-
-      // Check if all are done to unlock Chronos Leap
+    function checkMilestoneUnlock() {
       const allDone = milestones[1] && milestones[2] && milestones[3];
       const leapBtn = document.getElementById('leap-btn');
       if (allDone) {
@@ -555,11 +475,28 @@
       }
     }
 
-    // Chronos Leap: Advances Era & Mutates World
-    function chronosLeap() {
+    document.getElementById('m1').addEventListener('click', function() {
+      milestones[1] = !milestones[1];
+      this.classList.toggle('completed', milestones[1]);
+      checkMilestoneUnlock();
+    });
+
+    document.getElementById('m2').addEventListener('click', function() {
+      milestones[2] = !milestones[2];
+      this.classList.toggle('completed', milestones[2]);
+      checkMilestoneUnlock();
+    });
+
+    document.getElementById('m3').addEventListener('click', function() {
+      milestones[3] = !milestones[3];
+      this.classList.toggle('completed', milestones[3]);
+      checkMilestoneUnlock();
+    });
+
+    document.getElementById('leap-btn').addEventListener('click', function() {
       const allDone = milestones[1] && milestones[2] && milestones[3];
       if (!allDone) {
-        alert("Complete all three era milestones in the bottom bar first!");
+        alert("Click and complete all 3 Era Goals in the bottom bar first!");
         return;
       }
 
@@ -568,42 +505,32 @@
       document.getElementById('era-label').innerText = "THE COASTAL MIGRATION";
       document.getElementById('pop-label').innerText = "45,000";
 
-      // Spawn new migration camp in Middle East / Red Sea
+      // Spawn second human camp across the Red Sea into Arabia
       const redSeaPos = { x: CAMP_POS.x + 80, y: CAMP_POS.y - 120 };
       for (let i = 0; i < 15; i++) spawnHuman(redSeaPos.x, redSeaPos.y);
 
-      alert("⚡ CHRONOS LEAP! Advanced to 70,000 BCE.\nHumans have migrated across the Red Sea into Arabia and the Levant!");
+      alert("⚡ CHRONOS LEAP! Advanced to 70,000 BCE.\nHumans have crossed the Red Sea into Arabia and the Levant!");
 
-      // Reset milestones for new era
+      // Reset for next era
       milestones = { 1: false, 2: false, 3: false };
-      document.getElementById('m1').className = 'milestone-btn';
-      document.getElementById('m1').innerHTML = '<span>🏹</span> Composite Bows';
-      document.getElementById('m2').className = 'milestone-btn';
-      document.getElementById('m2').innerHTML = '<span>🛶</span> Coastal Rafts';
-      document.getElementById('m3').className = 'milestone-btn';
-      document.getElementById('m3').innerHTML = '<span>🎨</span> Cave Art Traditions';
-      document.getElementById('leap-btn').classList.remove('unlocked');
-      document.getElementById('leap-btn').innerText = "⚡ CHRONOS LEAP";
-    }
+      const m1 = document.getElementById('m1');
+      const m2 = document.getElementById('m2');
+      const m3 = document.getElementById('m3');
+      m1.className = 'milestone-btn'; m1.innerHTML = '<span>🏹</span> Composite Bows';
+      m2.className = 'milestone-btn'; m2.innerHTML = '<span>🛶</span> Coastal Rafts';
+      m3.className = 'milestone-btn'; m3.innerHTML = '<span>🎨</span> Cave Art Traditions';
+      this.classList.remove('unlocked');
+      this.innerText = "⚡ CHRONOS LEAP";
+    });
 
-    // Custom Intervention Handlers
-    function openIntervene() { document.getElementById('intervention-modal').style.display = 'flex'; }
-    function closeIntervene() { document.getElementById('intervention-modal').style.display = 'none'; }
-    function applyIntervention() {
-      const input = document.getElementById('intervene-input').value;
-      if (!input) return;
-      alert(`Intervention Enacted: "${input}"\nThe simulation will incorporate this into the next era leap!`);
-      closeIntervene();
-    }
-
-    // 8. Main Render Loop
+    // 9. Main Render Loop
     let ticker = 0;
     app.ticker.add(() => {
       ticker += 0.05;
 
-      // Pass time slowly
-      if (currentYear > 10000 && timeSpeed > 0) {
-        currentYear -= Math.round(timeSpeed * 0.4);
+      // Pass time slowly once game is started
+      if (gameStarted && currentYear > 10000) {
+        currentYear -= 1;
         document.getElementById('year-label').innerText = currentYear.toLocaleString() + ' BCE';
       }
 
@@ -662,11 +589,6 @@
           if (Math.hypot(h.x - CAMP_POS.x, h.y - CAMP_POS.y) > 50) {
             h.vx *= -1; h.vy *= -1;
           }
-        });
-
-        animals.forEach(a => {
-          a.x += a.vx; a.y += a.vy;
-          if (Math.random() < 0.02) a.vx *= -1;
         });
       }
     });
