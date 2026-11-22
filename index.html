@@ -4,15 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Chronos: Earth 300,000 BCE</title>
-  <!-- PixiJS WebGL Engine via CDN -->
+  <!-- PixiJS WebGL Engine -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.2/pixi.min.js"></script>
   <style>
     :root {
       --bg: #030712;
-      --panel: rgba(15, 23, 42, 0.88);
+      --panel: rgba(15, 23, 42, 0.92);
       --border: #334155;
       --accent: #38bdf8;
       --gold: #fbbf24;
+      --green: #22c55e;
       --text: #f8fafc;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
@@ -63,9 +64,9 @@
       color: var(--accent);
       font-weight: 700;
     }
-    .year-display { font-size: 1.6rem; font-weight: 800; }
+    .year-display { font-size: 1.6rem; font-weight: 800; font-family: monospace; }
 
-    /* Bottom Timeline */
+    /* Bottom Timeline Bar */
     .bottom-bar {
       position: absolute;
       bottom: 20px;
@@ -74,29 +75,89 @@
       background: var(--panel);
       backdrop-filter: blur(12px);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 14px 24px;
+      border-radius: 14px;
+      padding: 16px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      pointer-events: auto;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    }
+    .timeline-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      pointer-events: auto;
+      gap: 16px;
     }
-    .timeline-info { display: flex; flex-direction: column; gap: 4px; }
-    .controls-hint { font-size: 0.8rem; color: #94a3b8; }
-    .btn-action {
-      background: #0284c7;
-      color: white;
+    .milestones-group {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .milestone-btn {
+      background: #1e293b;
+      color: #94a3b8;
+      border: 1px solid #334155;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .milestone-btn:hover { border-color: var(--accent); color: #fff; }
+    .milestone-btn.completed {
+      background: rgba(34, 197, 94, 0.15);
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .action-group {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .btn-speed {
+      background: #1e293b;
+      color: #cbd5e1;
+      border: 1px solid #334155;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: bold;
+    }
+    .btn-speed.active { background: var(--accent); color: #04101e; border-color: var(--accent); }
+
+    .btn-leap {
+      background: #334155;
+      color: #64748b;
       border: none;
       padding: 10px 22px;
       border-radius: 8px;
-      font-weight: 700;
-      font-size: 0.9rem;
-      cursor: pointer;
-      transition: background 0.2s;
+      font-weight: 800;
+      font-size: 0.95rem;
+      cursor: not-allowed;
+      transition: all 0.3s;
+      letter-spacing: 0.5px;
     }
-    .btn-action:hover { background: #0369a1; }
+    .btn-leap.unlocked {
+      background: var(--gold);
+      color: #030712;
+      cursor: pointer;
+      box-shadow: 0 0 20px rgba(251, 191, 36, 0.6);
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+      100% { transform: scale(1); }
+    }
 
-    /* Intro Overlay */
+    /* Start Overlay */
     #intro-modal {
       position: absolute;
       inset: 0;
@@ -131,6 +192,39 @@
       transition: transform 0.2s;
     }
     .btn-start:hover { transform: scale(1.05); }
+
+    /* Custom Intervention Modal */
+    #intervention-modal {
+      position: absolute;
+      inset: 0;
+      background: rgba(3, 7, 18, 0.7);
+      backdrop-filter: blur(6px);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 90;
+      pointer-events: auto;
+    }
+    .intervention-box {
+      background: var(--panel);
+      border: 1px solid var(--accent);
+      padding: 24px;
+      border-radius: 12px;
+      max-width: 500px;
+      width: 90%;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .intervention-box input {
+      background: #0f172a;
+      border: 1px solid #334155;
+      padding: 12px;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 1rem;
+      outline: none;
+    }
   </style>
 </head>
 <body>
@@ -141,36 +235,67 @@
     <!-- Top HUD -->
     <div class="top-hud">
       <div class="hud-card">
-        <div class="era-badge">PALEOLITHIC DAWN</div>
-        <div class="year-display">300,000 BCE</div>
+        <div class="era-badge" id="era-label">PALEOLITHIC DAWN</div>
+        <div class="year-display" id="year-label">300,000 BCE</div>
       </div>
       <div class="hud-card" style="text-align: right;">
-        <div style="font-size: 0.85rem; color: #94a3b8;">FOCUSED REGION</div>
-        <div style="font-weight: 700; color: #f8fafc;" id="region-label">Great Rift Valley, Africa</div>
+        <div style="font-size: 0.8rem; color: #94a3b8;">GLOBAL HOMINIDS</div>
+        <div style="font-weight: 800; color: #f8fafc; font-size: 1.2rem;" id="pop-label">1,500</div>
         <div style="font-size: 0.8rem; color: var(--gold); margin-top: 4px;">Zoom: <span id="zoom-text">1.0x</span></div>
       </div>
     </div>
 
-    <!-- Bottom Timeline -->
+    <!-- Bottom Interactive Timeline -->
     <div class="bottom-bar">
-      <div class="timeline-info">
-        <div>🌍 Global Hominid Population: <strong>~1,500</strong></div>
-        <div class="controls-hint">🖱️ Scroll wheel to zoom in/out • Drag to pan Earth</div>
+      <div class="timeline-row">
+        <div class="milestones-group">
+          <span style="font-size: 0.85rem; font-weight: bold; color: #cbd5e1;">Era Goals:</span>
+          <button class="milestone-btn" id="m1" onclick="toggleMilestone(1)">
+            <span>🔥</span> Harness Controlled Fire
+          </button>
+          <button class="milestone-btn" id="m2" onclick="toggleMilestone(2)">
+            <span>🪓</span> Acheulean Handaxes
+          </button>
+          <button class="milestone-btn" id="m3" onclick="toggleMilestone(3)">
+            <span>🗣️</span> Form Clan Language
+          </button>
+        </div>
+
+        <div class="action-group">
+          <button class="btn-speed" id="sp-1" onclick="setSpeed(1)">1x</button>
+          <button class="btn-speed" id="sp-5" onclick="setSpeed(5)">5x</button>
+          <button class="milestone-btn" onclick="openIntervene()" style="border-color: var(--accent); color: var(--accent);">
+            ⚡ Intervene
+          </button>
+          <button class="btn-leap" id="leap-btn" onclick="chronosLeap()">⚡ CHRONOS LEAP</button>
+        </div>
       </div>
-      <button class="btn-action" onclick="focusOnCamp()">📍 Focus on Camp</button>
     </div>
 
     <!-- Start Overlay -->
     <div id="intro-modal">
       <h1>CHRONOS</h1>
-      <p>A living 8-bit simulation of Earth's true geography. You begin at the dawn of Homo sapiens in East Africa.</p>
+      <p>A living 8-bit simulation of Earth's true geography. The camera is locked to planetary bounds—zoom and pan freely.</p>
       <button class="btn-start" onclick="beginSimulation()">ENTER 300,000 BCE</button>
+    </div>
+
+    <!-- Intervene Modal -->
+    <div id="intervention-modal">
+      <div class="intervention-box">
+        <h3>Alter the Course of History</h3>
+        <p style="font-size: 0.85rem; color: #94a3b8;">Describe a divine or evolutionary intervention for this era:</p>
+        <input type="text" id="intervene-input" placeholder="e.g. Breed giant wolves for early transport...">
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+          <button class="btn-speed" onclick="closeIntervene()">Cancel</button>
+          <button class="btn-start" style="padding: 10px 18px; font-size: 0.9rem;" onclick="applyIntervention()">Enact Intervention</button>
+        </div>
+      </div>
     </div>
   </div>
 
   <script>
     // 1. Initialize PixiJS WebGL Renderer
-    PIXI.BaseTexture.defaultOptions.scaleMode = PIXI.SCALE_MODES.NEAREST; // Keeps pixel art ultra-crisp
+    PIXI.BaseTexture.defaultOptions.scaleMode = PIXI.SCALE_MODES.NEAREST;
 
     const app = new PIXI.Application({
       resizeTo: window,
@@ -181,31 +306,52 @@
     });
     document.getElementById('canvas-container').appendChild(app.view);
 
-    // World Dimensions (2048 x 1024 Equirectangular Earth)
+    // Geographic Dimensions
     const MAP_WIDTH = 2048;
     const MAP_HEIGHT = 1024;
 
-    // Real Geographic Coordinate for East African Rift Valley
-    // Longitude ~36°E, Latitude ~-3°S
+    // East African Rift Valley
     const CAMP_POS = {
       x: Math.round(((36 + 180) / 360) * MAP_WIDTH),     // ~1229 px
       y: Math.round(((90 - (-3)) / 180) * MAP_HEIGHT)    // ~529 px
     };
 
-    // Root World Container for Panning & Zooming
+    // Root World Container
     const world = new PIXI.Container();
     app.stage.addChild(world);
 
-    // Sub-containers for Layers
+    // Layers
     const mapLayer = new PIXI.Container();
     const foliageLayer = new PIXI.Container();
     const entitiesLayer = new PIXI.Container();
     const fxLayer = new PIXI.Container();
     const beaconLayer = new PIXI.Container();
-
     world.addChild(mapLayer, foliageLayer, entitiesLayer, fxLayer, beaconLayer);
 
-    // 2. Procedural Pixel Texture Generators (Zero Broken Links)
+    // 2. Clamp Camera to Prevent Void Dragging
+    function clampCamera() {
+      const sw = window.innerWidth;
+      const sh = window.innerHeight;
+      const curScale = world.scale.x;
+      const mw = MAP_WIDTH * curScale;
+      const mh = MAP_HEIGHT * curScale;
+
+      // X Boundaries
+      if (mw > sw) {
+        world.x = Math.min(0, Math.max(sw - mw, world.x));
+      } else {
+        world.x = (sw - mw) / 2; // Center horizontally if smaller than screen
+      }
+
+      // Y Boundaries
+      if (mh > sh) {
+        world.y = Math.min(0, Math.max(sh - mh, world.y));
+      } else {
+        world.y = (sh - mh) / 2; // Center vertically if smaller than screen
+      }
+    }
+
+    // 3. Pixel Texture Generators
     function createPixelTexture(w, h, drawFn) {
       const c = document.createElement('canvas');
       c.width = w;
@@ -216,164 +362,116 @@
       return PIXI.Texture.from(c);
     }
 
-    // 16x16 Prehistoric Human Sprite
     const humanTexture = createPixelTexture(16, 16, ctx => {
-      // Body / Leather pelt
-      ctx.fillStyle = '#b45309';
-      ctx.fillRect(5, 5, 6, 6);
-      // Skin head
-      ctx.fillStyle = '#d97706';
-      ctx.fillRect(6, 2, 4, 4);
-      // Hair
-      ctx.fillStyle = '#1c1917';
-      ctx.fillRect(6, 1, 4, 2);
-      // Legs
-      ctx.fillStyle = '#92400e';
-      ctx.fillRect(5, 11, 2, 4);
-      ctx.fillRect(9, 11, 2, 4);
-      // Spear (Shaft & Flint tip)
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(12, 1, 1, 14);
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillRect(11, 0, 3, 2);
+      ctx.fillStyle = '#b45309'; ctx.fillRect(5, 5, 6, 6);
+      ctx.fillStyle = '#d97706'; ctx.fillRect(6, 2, 4, 4);
+      ctx.fillStyle = '#1c1917'; ctx.fillRect(6, 1, 4, 2);
+      ctx.fillStyle = '#92400e'; ctx.fillRect(5, 11, 2, 4); ctx.fillRect(9, 11, 2, 4);
+      ctx.fillStyle = '#78350f'; ctx.fillRect(12, 1, 1, 14);
+      ctx.fillStyle = '#94a3b8'; ctx.fillRect(11, 0, 3, 2);
     });
 
-    // 24x24 Pixel Savanna Acacia Tree
     const treeTexture = createPixelTexture(24, 24, ctx => {
-      // Trunk & Branches
-      ctx.fillStyle = '#451a03';
-      ctx.fillRect(11, 12, 2, 10);
-      ctx.fillRect(9, 10, 3, 2);
-      ctx.fillRect(12, 9, 4, 2);
-      // Flat Savanna Canopy (Umbrella-shaped)
-      ctx.fillStyle = '#15803d';
-      ctx.fillRect(4, 5, 16, 4);
-      ctx.fillRect(2, 6, 20, 2);
-      // Highlights
-      ctx.fillStyle = '#4ade80';
-      ctx.fillRect(5, 5, 6, 1);
-      ctx.fillRect(13, 5, 5, 1);
+      ctx.fillStyle = '#451a03'; ctx.fillRect(11, 12, 2, 10); ctx.fillRect(9, 10, 3, 2); ctx.fillRect(12, 9, 4, 2);
+      ctx.fillStyle = '#15803d'; ctx.fillRect(4, 5, 16, 4); ctx.fillRect(2, 6, 20, 2);
+      ctx.fillStyle = '#4ade80'; ctx.fillRect(5, 5, 6, 1); ctx.fillRect(13, 5, 5, 1);
     });
 
-    // 10x8 Gazelle/Animal Sprite
     const animalTexture = createPixelTexture(10, 8, ctx => {
-      ctx.fillStyle = '#d97706';
-      ctx.fillRect(2, 2, 6, 3); // Body
-      ctx.fillRect(7, 0, 2, 3); // Neck/Head
-      // Legs
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(2, 5, 1, 3);
-      ctx.fillRect(7, 5, 1, 3);
+      ctx.fillStyle = '#d97706'; ctx.fillRect(2, 2, 6, 3); ctx.fillRect(7, 0, 2, 3);
+      ctx.fillStyle = '#78350f'; ctx.fillRect(2, 5, 1, 3); ctx.fillRect(7, 5, 1, 3);
     });
 
-    // 3. Load the Real 2048x1024 Earth Map
-    // Uses Three.js CDN planet texture (fast, CORS-enabled, reliable)
+    // 4. Load Real Earth Map
     const earthMapUrl = 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/textures/planets/earth_atmos_2048.jpg';
-    
-    // Instant fallback map while satellite loads
     const fallbackCanvas = document.createElement('canvas');
-    fallbackCanvas.width = MAP_WIDTH;
-    fallbackCanvas.height = MAP_HEIGHT;
+    fallbackCanvas.width = MAP_WIDTH; fallbackCanvas.height = MAP_HEIGHT;
     const fctx = fallbackCanvas.getContext('2d');
-    fctx.fillStyle = '#0f172a'; // Deep ocean
-    fctx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+    fctx.fillStyle = '#0f172a'; fctx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
     const mapSprite = new PIXI.Sprite(PIXI.Texture.from(fallbackCanvas));
-    mapSprite.width = MAP_WIDTH;
-    mapSprite.height = MAP_HEIGHT;
+    mapSprite.width = MAP_WIDTH; mapSprite.height = MAP_HEIGHT;
     mapLayer.addChild(mapSprite);
 
-    // Stream in the actual high-res Earth texture
     PIXI.Assets.load(earthMapUrl).then(tex => {
       tex.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
       mapSprite.texture = tex;
-    }).catch(() => console.log("Using procedural baseline."));
+    });
 
-    // 4. Populate East Africa Camp
-    // Campfire
+    // 5. Populate Camp
     const fireGraphic = new PIXI.Graphics();
     fxLayer.addChild(fireGraphic);
 
-    // Smoke Particles
     const smokeParticles = [];
     for (let i = 0; i < 15; i++) {
       const p = new PIXI.Graphics();
-      p.beginFill(0x94a3b8, 0.6);
-      p.drawCircle(0, 0, 1.5);
-      p.endFill();
-      p.x = CAMP_POS.x;
-      p.y = CAMP_POS.y - 4;
-      p.vy = -0.3 - Math.random() * 0.4;
-      p.vx = (Math.random() - 0.5) * 0.2;
+      p.beginFill(0x94a3b8, 0.6); p.drawCircle(0, 0, 1.5); p.endFill();
+      p.x = CAMP_POS.x; p.y = CAMP_POS.y - 4;
+      p.vy = -0.3 - Math.random() * 0.4; p.vx = (Math.random() - 0.5) * 0.2;
       p.alpha = Math.random();
       smokeParticles.push(p);
       fxLayer.addChild(p);
     }
 
-    // Humans
     const humans = [];
-    for (let i = 0; i < 12; i++) {
+    function spawnHuman(x, y) {
       const s = new PIXI.Sprite(humanTexture);
       s.anchor.set(0.5, 0.8);
-      s.x = CAMP_POS.x + (Math.random() * 60 - 30);
-      s.y = CAMP_POS.y + (Math.random() * 50 - 25);
+      s.x = x + (Math.random() * 40 - 20);
+      s.y = y + (Math.random() * 40 - 20);
       s.vx = (Math.random() - 0.5) * 0.3;
       s.vy = (Math.random() - 0.5) * 0.3;
       entitiesLayer.addChild(s);
       humans.push(s);
     }
+    for (let i = 0; i < 14; i++) spawnHuman(CAMP_POS.x, CAMP_POS.y);
 
-    // Savanna Acacia Trees & Rocks
     for (let i = 0; i < 45; i++) {
       const tree = new PIXI.Sprite(treeTexture);
       tree.anchor.set(0.5, 1);
-      // Scatter in surrounding savanna
       const angle = Math.random() * Math.PI * 2;
-      const dist = 30 + Math.random() * 120;
+      const dist = 30 + Math.random() * 140;
       tree.x = CAMP_POS.x + Math.cos(angle) * dist;
       tree.y = CAMP_POS.y + Math.sin(angle) * dist;
       foliageLayer.addChild(tree);
     }
 
-    // Gazelle Wildlife
     const animals = [];
     for (let i = 0; i < 8; i++) {
       const a = new PIXI.Sprite(animalTexture);
       a.anchor.set(0.5, 0.8);
       a.x = CAMP_POS.x + 80 + Math.random() * 80;
       a.y = CAMP_POS.y - 40 + Math.random() * 80;
-      a.vx = (Math.random() - 0.5) * 0.2;
-      a.vy = (Math.random() - 0.5) * 0.2;
+      a.vx = (Math.random() - 0.5) * 0.2; a.vy = (Math.random() - 0.5) * 0.2;
       entitiesLayer.addChild(a);
       animals.push(a);
     }
 
-    // Global Orbit Beacon (Visible only when zoomed out)
     const beacon = new PIXI.Graphics();
     beaconLayer.addChild(beacon);
 
-    // 5. Camera & Navigation
-    let camera = {
-      x: window.innerWidth / 2 - (CAMP_POS.x * 0.8),
-      y: window.innerHeight / 2 - (CAMP_POS.y * 0.8),
-      scale: 0.8,
-      targetX: 0,
-      targetY: 0,
-      targetScale: 0.8,
-      isLerping: false
-    };
+    // Initial Minimum Scale to Fill Screen
+    function getMinZoom() {
+      return Math.max(window.innerWidth / MAP_WIDTH, window.innerHeight / MAP_HEIGHT);
+    }
 
-    // Center world initially
-    world.x = (window.innerWidth - MAP_WIDTH * 0.8) / 2;
-    world.y = (window.innerHeight - MAP_HEIGHT * 0.8) / 2;
-    world.scale.set(0.8);
+    let minScale = getMinZoom();
+    world.scale.set(minScale);
+    clampCamera();
 
-    // Pan Handlers
+    // 6. Navigation & Clamped Dragging
+    let camera = { isLerping: false, targetX: 0, targetY: 0, targetScale: 1 };
     let isDragging = false;
     let dragStart = { x: 0, y: 0 };
     let worldStart = { x: 0, y: 0 };
 
+    window.addEventListener('resize', () => {
+      minScale = getMinZoom();
+      if (world.scale.x < minScale) world.scale.set(minScale);
+      clampCamera();
+    });
+
     window.addEventListener('pointerdown', e => {
-      if (e.target.closest('.ui-layer') || e.clientY > window.innerHeight - 80) return;
+      if (e.target.closest('.ui-layer') || e.target.closest('.bottom-bar')) return;
       isDragging = true;
       camera.isLerping = false;
       dragStart = { x: e.clientX, y: e.clientY };
@@ -384,17 +482,19 @@
       if (!isDragging) return;
       world.x = worldStart.x + (e.clientX - dragStart.x);
       world.y = worldStart.y + (e.clientY - dragStart.y);
+      clampCamera(); // Ensures map can NEVER leave screen bounds
     });
 
     window.addEventListener('pointerup', () => isDragging = false);
 
-    // Smooth Google-Earth Style Zoom-to-Cursor
+    // Clamped Zoom
     window.addEventListener('wheel', e => {
       e.preventDefault();
       camera.isLerping = false;
 
       const zoomFactor = e.deltaY < 0 ? 1.25 : 0.8;
-      const newScale = Math.min(Math.max(world.scale.x * zoomFactor, 0.5), 32.0);
+      const minZ = getMinZoom();
+      const newScale = Math.min(Math.max(world.scale.x * zoomFactor, minZ), 32.0);
 
       const mouseX = e.clientX;
       const mouseY = e.clientY;
@@ -407,11 +507,12 @@
       world.scale.set(newScale);
       world.x = mouseX - worldPos.x * newScale;
       world.y = mouseY - worldPos.y * newScale;
+      clampCamera();
 
       document.getElementById('zoom-text').innerText = newScale.toFixed(1) + 'x';
     }, { passive: false });
 
-    // Camera Focus Helper
+    // Focus Camera Function
     function focusOnCamp(targetZoom = 18.0) {
       camera.isLerping = true;
       camera.targetScale = targetZoom;
@@ -423,21 +524,97 @@
       const modal = document.getElementById('intro-modal');
       modal.style.opacity = '0';
       setTimeout(() => modal.style.display = 'none', 600);
-      focusOnCamp(16.0); // Smooth dive from orbit into Rift Valley
+      focusOnCamp(16.0);
     }
 
-    // 6. Game Render Loop
+    // 7. Interactive Timeline & Milestones Logic
+    let currentYear = 300000;
+    let timeSpeed = 1;
+    let milestones = { 1: false, 2: false, 3: false };
+
+    function setSpeed(sp) {
+      timeSpeed = sp;
+      document.getElementById('sp-1').classList.toggle('active', sp === 1);
+      document.getElementById('sp-5').classList.toggle('active', sp === 5);
+    }
+
+    function toggleMilestone(num) {
+      milestones[num] = !milestones[num];
+      const btn = document.getElementById(`m${num}`);
+      btn.classList.toggle('completed', milestones[num]);
+
+      // Check if all are done to unlock Chronos Leap
+      const allDone = milestones[1] && milestones[2] && milestones[3];
+      const leapBtn = document.getElementById('leap-btn');
+      if (allDone) {
+        leapBtn.classList.add('unlocked');
+        leapBtn.innerText = "⚡ CHRONOS LEAP READY!";
+      } else {
+        leapBtn.classList.remove('unlocked');
+        leapBtn.innerText = "⚡ CHRONOS LEAP";
+      }
+    }
+
+    // Chronos Leap: Advances Era & Mutates World
+    function chronosLeap() {
+      const allDone = milestones[1] && milestones[2] && milestones[3];
+      if (!allDone) {
+        alert("Complete all three era milestones in the bottom bar first!");
+        return;
+      }
+
+      currentYear = 70000;
+      document.getElementById('year-label').innerText = "70,000 BCE";
+      document.getElementById('era-label').innerText = "THE COASTAL MIGRATION";
+      document.getElementById('pop-label').innerText = "45,000";
+
+      // Spawn new migration camp in Middle East / Red Sea
+      const redSeaPos = { x: CAMP_POS.x + 80, y: CAMP_POS.y - 120 };
+      for (let i = 0; i < 15; i++) spawnHuman(redSeaPos.x, redSeaPos.y);
+
+      alert("⚡ CHRONOS LEAP! Advanced to 70,000 BCE.\nHumans have migrated across the Red Sea into Arabia and the Levant!");
+
+      // Reset milestones for new era
+      milestones = { 1: false, 2: false, 3: false };
+      document.getElementById('m1').className = 'milestone-btn';
+      document.getElementById('m1').innerHTML = '<span>🏹</span> Composite Bows';
+      document.getElementById('m2').className = 'milestone-btn';
+      document.getElementById('m2').innerHTML = '<span>🛶</span> Coastal Rafts';
+      document.getElementById('m3').className = 'milestone-btn';
+      document.getElementById('m3').innerHTML = '<span>🎨</span> Cave Art Traditions';
+      document.getElementById('leap-btn').classList.remove('unlocked');
+      document.getElementById('leap-btn').innerText = "⚡ CHRONOS LEAP";
+    }
+
+    // Custom Intervention Handlers
+    function openIntervene() { document.getElementById('intervention-modal').style.display = 'flex'; }
+    function closeIntervene() { document.getElementById('intervention-modal').style.display = 'none'; }
+    function applyIntervention() {
+      const input = document.getElementById('intervene-input').value;
+      if (!input) return;
+      alert(`Intervention Enacted: "${input}"\nThe simulation will incorporate this into the next era leap!`);
+      closeIntervene();
+    }
+
+    // 8. Main Render Loop
     let ticker = 0;
     app.ticker.add(() => {
       ticker += 0.05;
 
-      // Handle Smooth Camera Fly-To (LERP)
+      // Pass time slowly
+      if (currentYear > 10000 && timeSpeed > 0) {
+        currentYear -= Math.round(timeSpeed * 0.4);
+        document.getElementById('year-label').innerText = currentYear.toLocaleString() + ' BCE';
+      }
+
+      // Smooth Camera LERP
       if (camera.isLerping) {
         world.x += (camera.targetX - world.x) * 0.06;
         world.y += (camera.targetY - world.y) * 0.06;
         const currentScale = world.scale.x;
         const nextScale = currentScale + (camera.targetScale - currentScale) * 0.06;
         world.scale.set(nextScale);
+        clampCamera();
         document.getElementById('zoom-text').innerText = nextScale.toFixed(1) + 'x';
 
         if (Math.abs(camera.targetScale - nextScale) < 0.01) {
@@ -446,15 +623,12 @@
       }
 
       const currentZoom = world.scale.x;
-
-      // LOD SWITCHING:
-      // When far away, hide tiny foliage/people and show glowing orbit beacon
       const showMicroDetail = currentZoom >= 3.5;
       foliageLayer.visible = showMicroDetail;
       entitiesLayer.visible = showMicroDetail;
       fxLayer.visible = showMicroDetail;
 
-      // Draw Orbit Beacon when zoomed out
+      // Orbit Beacon
       beacon.clear();
       if (!showMicroDetail) {
         const pulse = Math.sin(ticker * 2) * 2;
@@ -465,9 +639,8 @@
         beacon.endFill();
       }
 
-      // Micro Detail Animations (Only compute when zoomed in)
+      // Ground Level Animations
       if (showMicroDetail) {
-        // Campfire Flicker
         fireGraphic.clear();
         fireGraphic.beginFill(0xf97316);
         fireGraphic.drawRect(CAMP_POS.x - 2, CAMP_POS.y - 2, 4 + Math.sin(ticker * 5), 4 + Math.cos(ticker * 5));
@@ -475,11 +648,8 @@
         fireGraphic.drawRect(CAMP_POS.x - 1, CAMP_POS.y - 1, 2, 2);
         fireGraphic.endFill();
 
-        // Smoke particles
         smokeParticles.forEach(p => {
-          p.y += p.vy;
-          p.x += p.vx;
-          p.alpha -= 0.008;
+          p.y += p.vy; p.x += p.vx; p.alpha -= 0.008;
           if (p.alpha <= 0) {
             p.x = CAMP_POS.x + (Math.random() - 0.5) * 2;
             p.y = CAMP_POS.y - 3;
@@ -487,21 +657,15 @@
           }
         });
 
-        // Human Wandering
         humans.forEach(h => {
-          h.x += h.vx;
-          h.y += h.vy;
-          // Soft tether around camp center
-          if (Math.hypot(h.x - CAMP_POS.x, h.y - CAMP_POS.y) > 40) {
-            h.vx *= -1;
-            h.vy *= -1;
+          h.x += h.vx; h.y += h.vy;
+          if (Math.hypot(h.x - CAMP_POS.x, h.y - CAMP_POS.y) > 50) {
+            h.vx *= -1; h.vy *= -1;
           }
         });
 
-        // Animal Wandering
         animals.forEach(a => {
-          a.x += a.vx;
-          a.y += a.vy;
+          a.x += a.vx; a.y += a.vy;
           if (Math.random() < 0.02) a.vx *= -1;
         });
       }
