@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chronos: Earth 300,000 BCE</title>
+  <title>Chronos: Living 8-Bit Earth</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.2/pixi.min.js"></script>
   <style>
     :root {
@@ -13,6 +13,7 @@
       --accent: #38bdf8;
       --gold: #fbbf24;
       --green: #22c55e;
+      --orange: #f97316;
       --text: #f8fafc;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
@@ -32,9 +33,7 @@
     /* Top HUD */
     .top-hud {
       position: fixed;
-      top: 14px;
-      left: 16px;
-      right: 16px;
+      top: 12px; left: 14px; right: 14px;
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
@@ -46,57 +45,70 @@
       background: var(--panel);
       backdrop-filter: blur(10px);
       border: 1px solid var(--border);
-      padding: 10px 16px;
+      padding: 10px 15px;
       border-radius: 10px;
       pointer-events: auto;
       box-shadow: 0 4px 20px rgba(0,0,0,0.6);
     }
-    .era-badge {
-      font-size: 0.7rem;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      color: var(--accent);
-      font-weight: 800;
-    }
-    .year-display { font-size: 1.4rem; font-weight: 800; font-family: monospace; margin-top: 2px; }
+    .era-badge { font-size: 0.68rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent); font-weight: 800; }
+    .year-display { font-size: 1.35rem; font-weight: 800; font-family: monospace; margin-top: 2px; }
+    .clock-row { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: #cbd5e1; margin-top: 4px; }
     .nav-btns { display: flex; gap: 6px; margin-top: 8px; justify-content: flex-end; }
     .btn-mini {
-      background: #1e293b;
-      color: #cbd5e1;
-      border: 1px solid #334155;
-      padding: 5px 10px;
-      border-radius: 6px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      cursor: pointer;
+      background: #1e293b; color: #cbd5e1; border: 1px solid #334155;
+      padding: 5px 10px; border-radius: 6px; font-size: 0.74rem; font-weight: 600; cursor: pointer;
     }
     .btn-mini:hover { border-color: var(--accent); color: #fff; }
 
-    #inspector-card {
+    /* Left "SHOW ON MAP:" Tracker Bar */
+    .show-bar {
       position: fixed;
-      top: 96px;
-      left: 16px;
+      top: 112px; left: 14px;
       background: var(--panel);
-      border: 1px solid var(--accent);
-      padding: 10px 14px;
-      border-radius: 8px;
-      font-size: 0.8rem;
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      width: 215px;
       z-index: 50;
-      display: none;
-      max-width: 240px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.6);
+    }
+    .show-title { font-size: 0.72rem; letter-spacing: 1px; color: #94a3b8; font-weight: 800; margin-bottom: 2px; }
+    .track-toggle {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #0f172a; border: 1px solid #1e293b;
+      padding: 7px 10px; border-radius: 7px; cursor: pointer;
+      font-size: 0.8rem; color: #cbd5e1; transition: all 0.15s;
+    }
+    .track-toggle:hover { border-color: var(--accent); }
+    .track-toggle.active { border-color: var(--accent); background: rgba(56, 189, 248, 0.12); color: #fff; font-weight: 700; }
+    .track-note { font-size: 0.68rem; color: #94a3b8; padding: 2px 4px; line-height: 1.35; }
+
+    /* Inspector & Chronicle Toast */
+    #chronicle-toast {
+      position: fixed;
+      top: 84px; left: 50%; transform: translateX(-50%);
+      background: rgba(10, 15, 28, 0.95);
+      border: 1px solid var(--gold);
+      padding: 12px 20px; border-radius: 10px;
+      max-width: 520px; width: 90%;
+      z-index: 80; display: none;
+      font-size: 0.88rem; line-height: 1.5; text-align: center;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.8);
     }
 
-    /* Bottom Timeline */
+    /* Bottom Interactive Bar */
     .bottom-bar {
       position: fixed;
-      bottom: 14px;
-      left: 16px;
-      right: 16px;
+      bottom: 12px; left: 14px; right: 14px;
       background: var(--panel);
       backdrop-filter: blur(12px);
       border: 1px solid var(--border);
       border-radius: 12px;
-      padding: 12px 18px;
+      padding: 12px 16px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -105,138 +117,72 @@
       z-index: 50;
       box-shadow: 0 10px 30px rgba(0,0,0,0.7);
     }
-    .milestones-group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .milestone-btn {
-      background: #0f172a;
-      color: #94a3b8;
-      border: 1px solid #334155;
-      padding: 7px 12px;
-      border-radius: 7px;
-      font-size: 0.8rem;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.2s;
+    .tasks-group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .task-card {
+      background: #0f172a; border: 1px solid #334155;
+      padding: 7px 12px; border-radius: 8px;
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.8rem; cursor: pointer; transition: all 0.2s;
     }
-    .milestone-btn:hover { border-color: var(--accent); color: #fff; }
-    .milestone-btn.completed {
-      background: rgba(34, 197, 94, 0.15);
-      border-color: var(--green);
-      color: var(--green);
-      font-weight: 700;
-    }
+    .task-card:hover { border-color: var(--orange); }
+    .task-card.done { border-color: var(--green); background: rgba(34, 197, 94, 0.14); color: var(--green); font-weight: 700; cursor: default; }
 
-    .action-group { display: flex; gap: 8px; align-items: center; }
+    .action-group { display: flex; gap: 6px; align-items: center; }
     .btn-speed {
-      background: #0f172a;
-      color: #94a3b8;
-      border: 1px solid #334155;
-      padding: 7px 10px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 0.75rem;
-      font-weight: 700;
+      background: #0f172a; color: #94a3b8; border: 1px solid #334155;
+      padding: 7px 9px; border-radius: 6px; cursor: pointer; font-size: 0.74rem; font-weight: 700;
     }
     .btn-speed.active { background: var(--accent); color: #020617; border-color: var(--accent); }
     .btn-leap {
-      background: #1e293b;
-      color: #64748b;
-      border: 1px solid #334155;
-      padding: 8px 18px;
-      border-radius: 8px;
-      font-weight: 800;
-      font-size: 0.85rem;
-      cursor: not-allowed;
-      transition: all 0.3s;
+      background: #1e293b; color: #64748b; border: 1px solid #334155;
+      padding: 8px 16px; border-radius: 8px; font-weight: 800; font-size: 0.84rem; cursor: not-allowed; transition: all 0.3s;
     }
     .btn-leap.unlocked {
-      background: var(--gold);
-      color: #020617;
-      border-color: var(--gold);
-      cursor: pointer;
+      background: var(--gold); color: #020617; border-color: var(--gold); cursor: pointer;
       box-shadow: 0 0 18px rgba(251, 191, 36, 0.55);
     }
 
-    /* Intro Modal */
+    /* Modals */
     #intro-modal {
-      position: fixed;
-      inset: 0;
-      background: rgba(2, 6, 23, 0.84);
+      position: fixed; inset: 0;
+      background: rgba(2, 6, 23, 0.88);
       backdrop-filter: blur(8px);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      z-index: 9999;
-      text-align: center;
-      padding: 20px;
-      transition: opacity 0.6s ease;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      z-index: 9999; text-align: center; padding: 20px; transition: opacity 0.6s ease;
     }
-    #intro-modal h1 {
-      font-size: 3.5rem;
-      letter-spacing: 5px;
-      margin-bottom: 10px;
-      text-shadow: 0 0 30px rgba(56, 189, 248, 0.5);
-    }
-    #intro-modal p { color: #94a3b8; max-width: 500px; line-height: 1.6; margin-bottom: 26px; font-size: 1rem; }
+    #intro-modal h1 { font-size: 3.5rem; letter-spacing: 5px; margin-bottom: 10px; text-shadow: 0 0 30px rgba(56, 189, 248, 0.5); }
+    #intro-modal p { color: #94a3b8; max-width: 520px; line-height: 1.6; margin-bottom: 24px; font-size: 1rem; }
     .btn-start {
-      background: var(--accent);
-      color: #020617;
-      border: none;
-      padding: 15px 38px;
-      font-size: 1.05rem;
-      font-weight: 800;
-      border-radius: 8px;
-      cursor: pointer;
-      box-shadow: 0 0 25px rgba(56, 189, 248, 0.5);
-      transition: transform 0.2s, background 0.2s;
+      background: var(--accent); color: #020617; border: none;
+      padding: 14px 36px; font-size: 1.05rem; font-weight: 800; border-radius: 8px;
+      cursor: pointer; box-shadow: 0 0 25px rgba(56, 189, 248, 0.5); transition: transform 0.2s;
     }
-    .btn-start:hover { transform: scale(1.05); background: #7dd3fc; }
+    .btn-start:hover { transform: scale(1.05); }
 
-    /* Intervention Modal */
     #intervention-modal {
-      position: fixed;
-      inset: 0;
-      background: rgba(2, 6, 23, 0.78);
-      backdrop-filter: blur(6px);
-      display: none;
-      justify-content: center;
-      align-items: center;
-      z-index: 9990;
+      position: fixed; inset: 0; background: rgba(2, 6, 23, 0.78); backdrop-filter: blur(6px);
+      display: none; justify-content: center; align-items: center; z-index: 9990;
     }
     .intervention-box {
-      background: var(--panel);
-      border: 1px solid var(--accent);
-      padding: 22px;
-      border-radius: 12px;
-      max-width: 480px;
-      width: 90%;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
+      background: var(--panel); border: 1px solid var(--accent);
+      padding: 22px; border-radius: 12px; max-width: 480px; width: 90%;
+      display: flex; flex-direction: column; gap: 12px;
     }
     .intervention-box input {
-      background: #020617;
-      border: 1px solid #334155;
-      padding: 12px;
-      border-radius: 8px;
-      color: #fff;
-      font-size: 0.95rem;
-      outline: none;
+      background: #020617; border: 1px solid #334155; padding: 12px;
+      border-radius: 8px; color: #fff; font-size: 0.95rem; outline: none;
     }
-    .intervention-box input:focus { border-color: var(--accent); }
   </style>
 </head>
 <body>
 
   <div id="canvas-container"></div>
 
-  <!-- Intro Modal -->
+  <!-- Intro -->
   <div id="intro-modal">
     <h1>CHRONOS</h1>
-    <p>An infinite-detail 8-bit simulation of Earth. Dive from 4K orbital topography down through fractal coastlines and forests to watch early humans survive in 300,000 BCE.</p>
-    <button class="btn-start" id="start-btn">Loading 4K Earth...</button>
+    <p>An 8-bit subdividing Earth simulation. Zoom through Quadtree pixel chunks from 4K orbit down into dense forests, wildlife, and a 5-minute real-time day/night cycle starting in 300,000 BCE.</p>
+    <button class="btn-start" id="start-btn">Loading 4K Earth Data...</button>
   </div>
 
   <!-- Top HUD -->
@@ -244,67 +190,100 @@
     <div class="hud-card">
       <div class="era-badge" id="era-label">PALEOLITHIC DAWN</div>
       <div class="year-display" id="year-label">300,000 BCE</div>
-      <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px;" id="altitude-label">Altitude: Orbit</div>
+      <div class="clock-row">
+        <span id="clock-icon">☀️</span>
+        <span id="clock-text">08:30 AM • Morning</span>
+      </div>
     </div>
 
     <div class="hud-card" style="text-align: right;">
-      <div style="font-size: 0.75rem; color: #94a3b8;">GLOBAL HOMINIDS: <strong style="color:#fff;" id="pop-label">1,500</strong></div>
-      <div style="font-size: 0.75rem; color: var(--gold); margin-top: 2px;">Zoom: <span id="zoom-text">1.0x</span></div>
+      <div style="font-size: 0.75rem; color: #94a3b8;">GLOBAL HUMANS: <strong style="color:#fff;" id="pop-label">1,500</strong></div>
+      <div style="font-size: 0.74rem; color: var(--gold); margin-top: 2px;">Zoom: <span id="zoom-text">1.0x</span> • <span id="lod-text">LOD 0</span></div>
       <div class="nav-btns">
-        <button class="btn-mini" id="btn-orbit">🌍 Orbit View</button>
-        <button class="btn-mini" id="btn-camp">🔥 Rift Valley Camp</button>
+        <button class="btn-mini" id="btn-orbit">🌍 Orbit</button>
+        <button class="btn-mini" id="btn-camp">🔥 Rift Valley</button>
       </div>
     </div>
   </div>
 
-  <!-- Inspector -->
-  <div id="inspector-card"></div>
+  <!-- Left "SHOW ON MAP:" Tracker -->
+  <div class="show-bar">
+    <div class="show-title">SHOW ON MAP:</div>
+    <div class="track-toggle active" id="tog-humans" onclick="toggleTracker('humans')">
+      <span>👤 Humans / Tribes</span><span id="cnt-humans">1</span>
+    </div>
+    <div class="track-toggle" id="tog-bears" onclick="toggleTracker('bears')">
+      <span>🐻 Bears</span><span id="cnt-bears">4</span>
+    </div>
+    <div class="track-toggle" id="tog-horses" onclick="toggleTracker('horses')">
+      <span>🐎 Horses</span><span id="cnt-horses">4</span>
+    </div>
+    <div class="track-toggle" id="tog-mammoths" onclick="toggleTracker('mammoths')">
+      <span>🦣 Mammoths</span><span id="cnt-mammoths">3</span>
+    </div>
+    <div class="track-toggle" id="tog-lions" onclick="toggleTracker('lions')">
+      <span>🦁 Lions</span><span id="cnt-lions">3</span>
+    </div>
+    <div class="track-note" id="tracker-note">Click any glowing map pin to fly straight there.</div>
+  </div>
 
-  <!-- Bottom Timeline -->
+  <!-- Chronicle Toast -->
+  <div id="chronicle-toast"></div>
+
+  <!-- Bottom Interactive Bar -->
   <div class="bottom-bar">
-    <div class="milestones-group">
-      <span style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1;">Era Goals:</span>
-      <button class="milestone-btn" id="m1">🔥 Controlled Fire</button>
-      <button class="milestone-btn" id="m2">🪓 Flint Handaxes</button>
-      <button class="milestone-btn" id="m3">🗣️ Tribal Language</button>
+    <div class="tasks-group" id="tasks-container">
+      <div class="task-card" id="task-fire" onclick="actionSparkFire()">
+        <span>🔥</span> <span id="task-fire-txt">Ignite Campfire</span>
+      </div>
+      <div class="task-card" id="task-hunt" onclick="actionSendHunt()">
+        <span>🏹</span> <span id="task-hunt-txt">Hunt Gazelle (0/3)</span>
+      </div>
+      <div class="task-card" id="task-clan">
+        <span>🛖</span> <span id="task-clan-txt">Shelter Built (0/1)</span>
+      </div>
     </div>
 
     <div class="action-group">
       <button class="btn-speed" id="sp-0">❚❚</button>
       <button class="btn-speed active" id="sp-1">1x</button>
       <button class="btn-speed" id="sp-5">5x</button>
-      <button class="milestone-btn" id="btn-intervene" style="border-color: var(--accent); color: var(--accent);">⚡ Intervene</button>
+      <button class="btn-speed" id="sp-20">20x</button>
+      <button class="btn-mini" id="btn-intervene" style="border-color: var(--accent); color: var(--accent);">⚡ AI Intervene</button>
       <button class="btn-leap" id="leap-btn">⚡ CHRONOS LEAP</button>
     </div>
   </div>
 
-  <!-- Intervention Modal -->
+  <!-- AI Intervention Modal -->
   <div id="intervention-modal">
     <div class="intervention-box">
-      <h3 style="color: var(--accent);">Intervene in History</h3>
-      <p style="font-size: 0.85rem; color: #94a3b8;">Describe an evolutionary leap, climate shift, or cultural discovery for this era:</p>
-      <input type="text" id="intervene-input" placeholder="e.g. Teach the tribe to tame wild African painted dogs...">
+      <h3 style="color: var(--accent);">⚡ Alter History (AI Engine)</h3>
+      <p style="font-size: 0.82rem; color: #94a3b8;">Type any historical or environmental shift (e.g. "Turn the Sahara into a lush forest" or "Keep horses alive in North America"):</p>
+      <input type="text" id="intervene-input" placeholder="Describe what happens...">
       <div style="display: flex; justify-content: flex-end; gap: 8px;">
         <button class="btn-mini" id="close-intervene">Cancel</button>
-        <button class="btn-start" id="submit-intervene" style="padding: 8px 18px; font-size: 0.85rem;">Enact</button>
+        <button class="btn-start" id="submit-intervene" style="padding: 8px 18px; font-size: 0.85rem;">Enact Shift</button>
       </div>
     </div>
   </div>
 
   <script>
     // =========================================================
-    // 1. INITIALIZE PIXI ENGINE & CONSTANTS (4096 x 2048 WORLD)
+    // 1. INITIALIZE PIXI ENGINE & COORDINATES
     // =========================================================
     let gameStarted = false;
+    let texturesReady = false;
     const MAP_WIDTH = 4096;
     const MAP_HEIGHT = 2048;
-    const MAX_ZOOM = 600.0;
+    const MAX_ZOOM = 500.0;
+    const TILE_PX = 128; // Every subdividing chunk is 128x128 crisp 8-bit pixels
 
-    // East African Rift Valley (Serengeti / Olduvai area: ~35.8°E, ~2.8°S)
-    let CAMP_POS = {
-      x: ((35.8 + 180) / 360) * MAP_WIDTH,
-      y: ((90 - (-2.8)) / 180) * MAP_HEIGHT
-    };
+    function latLonToWorld(lat, lon) {
+      return {
+        x: ((lon + 180) / 360) * MAP_WIDTH,
+        y: ((90 - lat) / 180) * MAP_HEIGHT
+      };
+    }
 
     const app = new PIXI.Application({
       resizeTo: window,
@@ -316,582 +295,676 @@
     const canvasEl = app.view;
     document.getElementById('canvas-container').appendChild(canvasEl);
 
-    // =========================================================
-    // 2. GPU FRACTAL MULTI-SCALE TERRAIN SHADER
-    // =========================================================
-    const vertexSrc = `
-      attribute vec2 aVertexPosition;
-      uniform mat3 translationMatrix;
-      uniform mat3 projectionMatrix;
-      uniform vec2 uScreenSize;
-      varying vec2 vScreenPos;
-
-      void main() {
-        vScreenPos = aVertexPosition * uScreenSize;
-        gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vScreenPos, 1.0)).xy, 0.0, 1.0);
-      }
-    `;
-
-    const fragmentSrc = `
-      precision highp float;
-
-      varying vec2 vScreenPos;
-      uniform vec2 uWorldOffset;
-      uniform float uZoom;
-      uniform vec2 uMapSize;
-      uniform float uTime;
-      uniform vec2 uCampPos;
-      uniform sampler2D uDayMap;
-      uniform sampler2D uWaterMap;
-
-      // Float32-safe spatial hash (prevents banding at 600x zoom)
-      float hash(vec2 p) {
-        vec2 wp = mod(p, 289.0);
-        return fract(sin(dot(wp, vec2(127.1, 311.7))) * 43758.5453123);
-      }
-
-      float noise(vec2 p) {
-        vec2 i = floor(p);
-        vec2 f = fract(p);
-        vec2 u = f * f * (3.0 - 2.0 * f);
-        return mix(
-          mix(hash(i + vec2(0.0, 0.0)), hash(i + vec2(1.0, 0.0)), u.x),
-          mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x),
-          u.y
-        );
-      }
-
-      float fbm(vec2 p) {
-        float v = 0.0;
-        float a = 0.5;
-        for (int i = 0; i < 4; i++) {
-          v += a * noise(p);
-          p *= 2.03;
-          a *= 0.5;
-        }
-        return v;
-      }
-
-      // Crisp pixel-grid noise for cascading 8-bit ground texture
-      float pixelNoise(vec2 worldPos, float cellSize) {
-        return hash(floor(worldPos / cellSize));
-      }
-
-      void main() {
-        vec2 worldPos = (vScreenPos - uWorldOffset) / uZoom;
-        vec2 uv = worldPos / uMapSize;
-
-        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
-          gl_FragColor = vec4(0.008, 0.024, 0.09, 1.0);
-          return;
-        }
-
-        // 1. Fractal Coastline Perturbation (increases shoreline quality on zoom)
-        float coastFade = smoothstep(5.0, 60.0, uZoom);
-        float coastNoise = (fbm(worldPos * 0.45) - 0.5) * 0.65 * coastFade
-                         + (fbm(worldPos * 3.2) - 0.5) * 0.18 * smoothstep(30.0, 200.0, uZoom);
-
-        // Organic UV warp for biome transitions when zoomed close
-        vec2 warp = vec2(
-          fbm(worldPos * 0.6 + vec2(4.1, 1.7)) - 0.5,
-          fbm(worldPos * 0.6 + vec2(9.2, 5.3)) - 0.5
-        ) * 0.0012 * coastFade;
-
-        vec2 sampleUV = clamp(uv + warp, 0.0, 1.0);
-
-        float waterVal = texture2D(uWaterMap, uv).r + coastNoise;
-        vec3 dayCol = texture2D(uDayMap, sampleUV).rgb;
-
-        // 2. Determine Water vs Land cleanly from Specular Water Mask
-        bool isWater = waterVal > 0.46;
-
-        vec3 finalCol;
-
-        if (isWater) {
-          // Ocean Depth & Coastal Shelves
-          float depth = clamp((waterVal - 0.46) * 2.5, 0.0, 1.0);
-          vec3 deepNavy = vec3(0.04, 0.12, 0.34);
-          vec3 midBlue  = vec3(0.08, 0.28, 0.62);
-          vec3 shallow  = vec3(0.06, 0.56, 0.78);
-
-          finalCol = mix(shallow, midBlue, smoothstep(0.0, 0.45, depth));
-          finalCol = mix(finalCol, deepNavy, smoothstep(0.45, 1.0, depth));
-
-          // Animated pixel wave shimmer at high zoom
-          float waveScale = mix(0.2, 0.015, smoothstep(10.0, 250.0, uZoom));
-          float wNoise = pixelNoise(worldPos + vec2(uTime * 0.012, 0.0), waveScale);
-          if (wNoise > 0.88) {
-            finalCol += vec3(0.08, 0.14, 0.18) * smoothstep(4.0, 80.0, uZoom);
-          }
-
-          // White seafoam lapping along coastlines
-          if (waterVal < 0.495) {
-            float foamWave = sin(worldPos.x * 12.0 + worldPos.y * 8.0 + uTime * 2.0);
-            if (foamWave > 0.25 && coastFade > 0.1) {
-              finalCol = mix(finalCol, vec3(0.88, 0.96, 1.0), 0.75 * coastFade);
-            }
-          }
-        } else {
-          // LAND BIOMES (Guaranteed zero blue rainforests!)
-          // Boost vibrancy for 8-bit aesthetic while keeping natural hue
-          float lum = dot(dayCol, vec3(0.299, 0.587, 0.114));
-          vec3 boosted = mix(vec3(lum), dayCol, 1.38);
-
-          // Beach border right along the water edge
-          float shoreDist = 0.46 - waterVal;
-          if (shoreDist < 0.055 && coastFade > 0.05) {
-            vec3 beachSand = vec3(0.86, 0.76, 0.52);
-            boosted = mix(beachSand, boosted, smoothstep(0.01, 0.055, shoreDist));
-          }
-
-          // 3. CASCADING MULTI-OCTAVE GROUND DETAIL (Keeps getting sharper as you zoom!)
-          // Octave 1: Macro hills / biome patches (zoom 6x -> 60x)
-          float oct1 = smoothstep(5.0, 35.0, uZoom);
-          float macroPat = (fbm(worldPos * 0.9) - 0.5) * 0.18 * oct1;
-
-          // Octave 2: Valley dirt / meadow patches (zoom 25x -> 140x)
-          float oct2 = smoothstep(22.0, 110.0, uZoom);
-          float medPat = (pixelNoise(worldPos, 0.06) - 0.5) * 0.14 * oct2;
-
-          // Octave 3: Ground turf / soil clods (zoom 80x -> 300x)
-          float oct3 = smoothstep(75.0, 220.0, uZoom);
-          float turfPat = (pixelNoise(worldPos, 0.015) - 0.5) * 0.15 * oct3;
-
-          // Octave 4: Individual pixel grass blades, pebbles, wildflowers (zoom 180x -> 600x)
-          float oct4 = smoothstep(160.0, 360.0, uZoom);
-          float micro = pixelNoise(worldPos, 0.0035);
-          vec3 microTint = vec3(0.0);
-          if (micro > 0.84) {
-            // Bright grass tip or pebble
-            microTint = (boosted.g > boosted.r * 0.9) ? vec3(0.10, 0.18, 0.04) : vec3(0.12, 0.10, 0.06);
-          } else if (micro < 0.14) {
-            // Deep soil shadow pixel
-            microTint = vec3(-0.10, -0.10, -0.08);
-          } else if (micro > 0.495 && micro < 0.502 && boosted.g > 0.35) {
-            // Occasional tiny wildflower speck
-            microTint = vec3(0.28, 0.24, -0.05);
-          }
-
-          finalCol = clamp(boosted + macroPat + medPat + turfPat + microTint * oct4, 0.0, 1.0);
-
-          // Packed warm earth clearing around the Rift Valley Camp
-          float campDist = distance(worldPos, uCampPos);
-          if (campDist < 1.6) {
-            float clearingFade = (1.0 - smoothstep(0.6, 1.5, campDist)) * smoothstep(60.0, 180.0, uZoom);
-            vec3 packedEarth = vec3(0.48, 0.35, 0.21) + (pixelNoise(worldPos, 0.004) - 0.5) * 0.12;
-            finalCol = mix(finalCol, packedEarth, clearingFade * 0.72);
-          }
-        }
-
-        // Subtle 8-bit palette crunch when zoomed far out
-        float orbitQuant = 1.0 - smoothstep(1.0, 12.0, uZoom);
-        if (orbitQuant > 0.05) {
-          vec3 qCol = floor(finalCol * 18.0 + 0.5) / 18.0;
-          finalCol = mix(finalCol, qCol, orbitQuant * 0.65);
-        }
-
-        gl_FragColor = vec4(finalCol, 1.0);
-      }
-    `;
-
-    const quadGeo = new PIXI.Geometry()
-      .addAttribute('aVertexPosition', [0, 0, 1, 0, 1, 1, 0, 1], 2)
-      .addIndex([0, 1, 2, 0, 2, 3]);
-
-    // Placeholder 1x1 textures while 4K images download
-    const dummyWaterTex = PIXI.Texture.WHITE;
-    const dummyDayTex = PIXI.Texture.from(document.createElement('canvas'));
-
-    const earthUniforms = {
-      uScreenSize: [window.innerWidth, window.innerHeight],
-      uWorldOffset: [0, 0],
-      uZoom: 1.0,
-      uMapSize: [MAP_WIDTH, MAP_HEIGHT],
-      uTime: 0.0,
-      uCampPos: [CAMP_POS.x, CAMP_POS.y],
-      uDayMap: dummyDayTex,
-      uWaterMap: dummyWaterTex
-    };
-
-    const earthShader = PIXI.Shader.from(vertexSrc, fragmentSrc, earthUniforms);
-    const earthMesh = new PIXI.Mesh(quadGeo, earthShader);
-    app.stage.addChild(earthMesh);
-
-    // World container for sprites (trees, humans, huts, beacons)
     const world = new PIXI.Container();
     app.stage.addChild(world);
 
-    const microPropsLayer = new PIXI.Container();
+    const quadLayer = new PIXI.Container();
+    quadLayer.sortableChildren = true; // Child LOD tiles always draw cleanly over parent tiles
+    const propsLayer = new PIXI.Container();
+    const entitiesLayer = new PIXI.Container();
+    const treesLayer = new PIXI.Container();
     const campLayer = new PIXI.Container();
-    const treeLayer = new PIXI.Container();
-    const beaconLayer = new PIXI.Container();
-    world.addChild(microPropsLayer, campLayer, treeLayer, beaconLayer);
+    const nightWorldGlowLayer = new PIXI.Container(); // Warm firelights inside world
+    const pinLayer = new PIXI.Container();
+
+    world.addChild(quadLayer, propsLayer, entitiesLayer, treesLayer, campLayer, nightWorldGlowLayer, pinLayer);
+
+    // Full-screen Day/Night Atmospheric Overlay
+    const dayNightOverlay = new PIXI.Graphics();
+    app.stage.addChild(dayNightOverlay);
 
     // =========================================================
-    // 3. LOAD 4K DAYMAP + OCEAN SPECULAR MASK & BUILD BIOME GRID
+    // 2. HISTORICAL STATE, TRIBES & ANIMAL BIOGEOGRAPHY
     // =========================================================
-    // Biome IDs: 0=Water, 2=Desert, 3=Savanna, 4=Grassland, 5=Forest, 6=Mountain, 7=Snow
+    const ERAS = [
+      { year: 300000, label: "300,000 BCE", name: "PALEOLITHIC DAWN", pop: "1,500" },
+      { year: 70000,  label: "70,000 BCE",  name: "OUT OF AFRICA MIGRATION", pop: "48,000" },
+      { year: 12000,  label: "12,000 BCE",  name: "THE ICE AGE CROSSINGS", pop: "4,000,000" },
+      { year: 4000,   label: "4,000 BCE",   name: "DAWN OF CIVILIZATION", pop: "30,000,000" },
+      { year: 1500,   label: "1500 CE",     name: "THE COLUMBIAN EXCHANGE", pop: "460,000,000", isCE: true }
+    ];
+
+    const simState = {
+      eraIndex: 0,
+      year: 300000,
+      isCE: false,
+      dayTime: 0.35, // 0..1 (0.0=Midnight, 0.25=Sunrise, 0.5=Noon, 0.75=Sunset)
+      fireLit: false,
+      huntsDone: 0,
+      huntsNeeded: 3,
+      shelterBuilt: false,
+      horsesInAmericas: true, // True in 300k BCE (early Equus), extinct 10,500 BCE -> 1500 CE!
+      mammothsAlive: true,
+      saharaGreen: false,
+      tribes: [
+        { name: "Rift Valley Clan", lat: -2.8, lon: 35.8, fireLit: false, huts: 0 }
+      ],
+      trackers: {
+        humans: true,
+        bears: false,
+        horses: false,
+        mammoths: false,
+        lions: false
+      }
+    };
+
+    // Biogeography Rules (Lat/Lon zones for animals)
+    const SPECIES_ZONES = {
+      bears: [
+        { name: "Alaskan Grizzlies", lat: 63, lon: -150, variant: "brown" },
+        { name: "Rocky Mountain Bears", lat: 51, lon: -115, variant: "brown" },
+        { name: "Siberian Brown Bears", lat: 60, lon: 95, variant: "brown" },
+        { name: "Arctic Polar Bears", lat: 74, lon: -95, variant: "polar" }
+      ],
+      horses: [
+        { name: "Eurasian Steppe Mustangs", lat: 49, lon: 72, region: "Eurasia" },
+        { name: "Mongolian Wild Horses", lat: 46, lon: 103, region: "Eurasia" },
+        { name: "Pontic Steppe Herds", lat: 47, lon: 36, region: "Eurasia" },
+        { name: "Great Plains Horses", lat: 41, lon: -102, region: "Americas" },
+        { name: "Argentine Pampas Herds", lat: -35, lon: -62, region: "Americas" }
+      ],
+      mammoths: [
+        { name: "Siberian Woolly Mammoths", lat: 67, lon: 115 },
+        { name: "Yukon Mammoths", lat: 65, lon: -140 },
+        { name: "Northern Steppe Mammoths", lat: 57, lon: 42 }
+      ],
+      lions: [
+        { name: "Serengeti Pride", lat: -2.5, lon: 34.8 },
+        { name: "Sahel Lions", lat: 12, lon: 15 },
+        { name: "Asiatic Lions (India)", lat: 21.5, lon: 71 }
+      ]
+    };
+
+    // =========================================================
+    // 3. LOAD 4K HAZE-FREE EARTH + OCEAN SPECULAR MASK
+    // =========================================================
     const DATA_W = 2048;
     const DATA_H = 1024;
+    let dayData = null;
+    let waterData = null;
     const biomeGrid = new Uint8Array(DATA_W * DATA_H);
 
-    const dayUrl = "https://cdn.jsdelivr.net/gh/mrdoob/three.js@master/examples/textures/planets/earth_day_4096.jpg";
-    const waterUrl = "https://cdn.jsdelivr.net/gh/mrdoob/three.js@master/examples/textures/planets/earth_specular_2048.jpg";
+    const dayUrl = "https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/textures/planets/earth_day_4096.jpg";
+    const waterUrl = "https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/textures/planets/earth_specular_2048.jpg";
 
-    let loadedDayImg = null;
-    let loadedWaterImg = null;
+    let imgD = new Image(); imgD.crossOrigin = "anonymous";
+    let imgW = new Image(); imgW.crossOrigin = "anonymous";
+    let loadedD = false, loadedW = false;
 
-    function checkTexturesReady() {
-      if (!loadedDayImg || !loadedWaterImg) return;
+    function initEarthData() {
+      if (!loadedD || !loadedW) return;
 
-      // Upload high-res textures to GPU shader
-      const dayTex = PIXI.Texture.from(loadedDayImg);
-      dayTex.baseTexture.scaleMode = PIXI.SCALE_MODES.LINEAR;
-      earthShader.uniforms.uDayMap = dayTex;
+      const cD = document.createElement('canvas'); cD.width = DATA_W; cD.height = DATA_H;
+      const ctxD = cD.getContext('2d');
+      ctxD.drawImage(imgD, 0, 0, DATA_W, DATA_H);
+      dayData = ctxD.getImageData(0, 0, DATA_W, DATA_H).data;
 
-      const waterTex = PIXI.Texture.from(loadedWaterImg);
-      waterTex.baseTexture.scaleMode = PIXI.SCALE_MODES.LINEAR;
-      earthShader.uniforms.uWaterMap = waterTex;
+      const cW = document.createElement('canvas'); cW.width = DATA_W; cW.height = DATA_H;
+      const ctxW = cW.getContext('2d');
+      ctxW.drawImage(imgW, 0, 0, DATA_W, DATA_H);
+      waterData = ctxW.getImageData(0, 0, DATA_W, DATA_H).data;
 
-      // Build CPU Biome Grid for procedural tree & rock spawning
-      try {
-        const cDay = document.createElement('canvas');
-        cDay.width = DATA_W; cDay.height = DATA_H;
-        const ctxD = cDay.getContext('2d');
-        ctxD.drawImage(loadedDayImg, 0, 0, DATA_W, DATA_H);
-        const dayData = ctxD.getImageData(0, 0, DATA_W, DATA_H).data;
+      // Classify Biomes cleanly (ZERO blue rainforest bug!)
+      for (let i = 0, px = 0; i < dayData.length; i += 4, px++) {
+        const r = dayData[i], g = dayData[i+1], b = dayData[i+2];
+        let spec = waterData[i];
 
-        const cWat = document.createElement('canvas');
-        cWat.width = DATA_W; cWat.height = DATA_H;
-        const ctxW = cWat.getContext('2d');
-        ctxW.drawImage(loadedWaterImg, 0, 0, DATA_W, DATA_H);
-        const watData = ctxW.getImageData(0, 0, DATA_W, DATA_H).data;
+        // Guard: Green jungle/forest vegetation is NEVER water
+        if (g > b + 10 && spec < 200) spec = 0;
 
-        for (let i = 0, px = 0; i < dayData.length; i += 4, px++) {
-          const isWater = watData[i] > 118;
-          if (isWater) {
-            biomeGrid[px] = 0;
-            continue;
-          }
-          const r = dayData[i], g = dayData[i+1], b = dayData[i+2];
+        if (spec > 132) {
+          biomeGrid[px] = 0; // Water
+        } else {
           if (r > 195 && g > 195 && b > 195) biomeGrid[px] = 7; // Snow
-          else if (r > 140 && g > 110 && b < 110 && r > g + 10) biomeGrid[px] = 2; // Desert
-          else if (r >= g - 10 && g > b + 15 && r > 90) biomeGrid[px] = 3; // Savanna
+          else if (r > 140 && g > 110 && b < 110 && r > g + 8) biomeGrid[px] = 2; // Desert
+          else if (r >= g - 12 && g > b + 14 && r > 85) biomeGrid[px] = 3; // Savanna
           else if (g >= r && g > b) biomeGrid[px] = ((r + g + b) / 3 < 95) ? 5 : 4; // Forest vs Grass
-          else biomeGrid[px] = 6; // Mountain / Rock
+          else biomeGrid[px] = 6; // Mountain / Tundra
         }
-      } catch (e) {
-        console.warn("CPU biome classification skipped:", e);
       }
 
-      const btn = document.getElementById('start-btn');
-      btn.innerText = "ENTER 300,000 BCE";
+      // Pre-generate LOD 0 (32 global tiles covering whole Earth)
+      for (let ty = 0; ty < 4; ty++) {
+        for (let tx = 0; tx < 8; tx++) {
+          getOrCreateTile(0, tx, ty, true);
+        }
+      }
+
+      texturesReady = true;
+      document.getElementById('start-btn').innerText = "ENTER 300,000 BCE";
     }
 
-    const imgD = new Image();
-    imgD.crossOrigin = "anonymous";
-    imgD.onload = () => { loadedDayImg = imgD; checkTexturesReady(); };
+    imgD.onload = () => { loadedD = true; initEarthData(); };
+    imgW.onload = () => { loadedW = true; initEarthData(); };
     imgD.src = dayUrl;
-
-    const imgW = new Image();
-    imgW.crossOrigin = "anonymous";
-    imgW.onload = () => { loadedWaterImg = imgW; checkTexturesReady(); };
     imgW.src = waterUrl;
 
     // =========================================================
-    // 4. HIGH-DETAIL PIXEL ART SPRITES (WITH FACES, EYES, SHADING)
+    // 4. GOOGLE-MAPS STYLE QUADTREE SUBDIVIDING 8-BIT CHUNKS
     // =========================================================
-    function buildSpriteFromMatrix(rows, palette) {
-      const h = rows.length;
-      const w = rows[0].length;
-      const c = document.createElement('canvas');
-      c.width = w; c.height = h;
-      const ctx = c.getContext('2d');
-      for (let y = 0; y < h; y++) {
-        const row = rows[y];
-        for (let x = 0; x < row.length; x++) {
-          const ch = row[x];
-          if (ch !== '.' && palette[ch]) {
-            ctx.fillStyle = palette[ch];
-            ctx.fillRect(x, y, 1, 1);
+    const tileCache = new Map();
+    const genQueue = [];
+    const queuedKeys = new Set();
+    let frameCounter = 0;
+
+    function hash2(x, y) {
+      let n = Math.sin((x % 512) * 127.1 + (y % 512) * 311.7) * 43758.5453123;
+      return n - Math.floor(n);
+    }
+
+    function smoothNoise(x, y) {
+      const ix = Math.floor(x), iy = Math.floor(y);
+      const fx = x - ix, fy = y - iy;
+      const ux = fx * fx * (3 - 2 * fx);
+      const uy = fy * fy * (3 - 2 * fy);
+      const a = hash2(ix, iy), b = hash2(ix + 1, iy);
+      const c = hash2(ix, iy + 1), d = hash2(ix + 1, iy + 1);
+      return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy;
+    }
+
+    function fbmWorld(x, y, octaves) {
+      let val = 0, amp = 0.5, freq = 1;
+      for (let o = 0; o < octaves; o++) {
+        val += amp * smoothNoise(x * freq, y * freq);
+        freq *= 2.03;
+        amp *= 0.5;
+      }
+      return val;
+    }
+
+    function sampleBilinear(arr, fx, fy) {
+      const x0 = Math.max(0, Math.min(DATA_W - 1, Math.floor(fx)));
+      const y0 = Math.max(0, Math.min(DATA_H - 1, Math.floor(fy)));
+      const x1 = Math.min(DATA_W - 1, x0 + 1);
+      const y1 = Math.min(DATA_H - 1, y0 + 1);
+      const tx = fx - x0, ty = fy - y0;
+
+      const i00 = (y0 * DATA_W + x0) * 4;
+      const i10 = (y0 * DATA_W + x1) * 4;
+      const i01 = (y1 * DATA_W + x0) * 4;
+      const i11 = (y1 * DATA_W + x1) * 4;
+
+      const r = (arr[i00]*(1-tx) + arr[i10]*tx)*(1-ty) + (arr[i01]*(1-tx) + arr[i11]*tx)*ty;
+      const g = (arr[i00+1]*(1-tx) + arr[i10+1]*tx)*(1-ty) + (arr[i01+1]*(1-tx) + arr[i11+1]*tx)*ty;
+      const b = (arr[i00+2]*(1-tx) + arr[i10+2]*tx)*(1-ty) + (arr[i01+2]*(1-tx) + arr[i11+2]*tx)*ty;
+      return [r, g, b];
+    }
+
+    function sampleWaterBilinear(fx, fy) {
+      const x0 = Math.max(0, Math.min(DATA_W - 1, Math.floor(fx)));
+      const y0 = Math.max(0, Math.min(DATA_H - 1, Math.floor(fy)));
+      const x1 = Math.min(DATA_W - 1, x0 + 1);
+      const y1 = Math.min(DATA_H - 1, y0 + 1);
+      const tx = fx - x0, ty = fy - y0;
+
+      const w00 = waterData[(y0 * DATA_W + x0) * 4];
+      const w10 = waterData[(y0 * DATA_W + x1) * 4];
+      const w01 = waterData[(y1 * DATA_W + x0) * 4];
+      const w11 = waterData[(y1 * DATA_W + x1) * 4];
+
+      return ((w00*(1-tx) + w10*tx)*(1-ty) + (w01*(1-tx) + w11*tx)*ty) / 255.0;
+    }
+
+    function buildTileSprite(L, tx, ty) {
+      const tileWorldSize = 512 / Math.pow(2, L);
+      const x0 = tx * tileWorldSize;
+      const y0 = ty * tileWorldSize;
+      const step = tileWorldSize / TILE_PX;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = TILE_PX;
+      canvas.height = TILE_PX;
+      const ctx = canvas.getContext('2d');
+      const imgData = ctx.createImageData(TILE_PX, TILE_PX);
+      const pxOut = imgData.data;
+
+      const octaves = Math.min(4, 1 + Math.floor(L / 2));
+      const coastAmp = L >= 1 ? 0.16 : 0;
+
+      for (let py = 0; py < TILE_PX; py++) {
+        const wy = y0 + (py + 0.5) * step;
+        const gy = wy * 0.5;
+        for (let px = 0; px < TILE_PX; px++) {
+          const wx = x0 + (px + 0.5) * step;
+          const gx = wx * 0.5;
+          const outIdx = (py * TILE_PX + px) * 4;
+
+          let [r, g, b] = sampleBilinear(dayData, gx, gy);
+          let wVal = sampleWaterBilinear(gx, gy);
+
+          // Prevent green rainforests from ever triggering ocean mask
+          if (g > b + 10 && wVal < 0.78) wVal = 0.0;
+
+          // Fractal coastline breaking as LOD increases
+          if (coastAmp > 0 && wVal > 0.15 && wVal < 0.85) {
+            const cNoise = (fbmWorld(wx * 0.35, wy * 0.35, octaves) - 0.5) * coastAmp;
+            wVal += cNoise;
+          }
+
+          let fr, fg, fb;
+          if (wVal > 0.50) {
+            // Water (Coastal turquoise -> Cobalt -> Deep Navy)
+            const depth = Math.min(1, (wVal - 0.50) * 2.5);
+            if (L >= 3 && wVal < 0.525) {
+              // Sandy / foamy surf shoreline
+              fr = 186; fg = 230; fb = 253;
+            } else if (depth < 0.35) {
+              fr = 14; fg = 116; fb = 180;
+            } else if (depth < 0.7) {
+              fr = 18; fg = 64; fb = 152;
+            } else {
+              fr = 10; fg = 32; fb = 88;
+            }
+            if (L >= 4 && hash2(Math.floor(wx * 8), Math.floor(wy * 8)) > 0.93) {
+              fr += 18; fg += 25; fb += 30;
+            }
+          } else {
+            // Land Biomes (Vivid, true-to-life 8-bit colors)
+            // Boost vibrancy without blue shift
+            const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+            r = Math.min(255, Math.max(0, lum + (r - lum) * 1.38));
+            g = Math.min(255, Math.max(0, lum + (g - lum) * 1.42));
+            b = Math.min(255, Math.max(0, lum + (b - lum) * 1.25));
+
+            // AI Intervention: Green the Sahara if enabled
+            if (simState.saharaGreen && wx > 1800 && wx < 2600 && wy > 640 && wy < 880) {
+              r = 45; g = 145; b = 55;
+            }
+
+            // Sandy beach along coastline at close LODs
+            if (L >= 3 && wVal > 0.455) {
+              r = 222; g = 196; b = 136;
+            }
+
+            // Crisp Sub-Pixel Detail & Ground Turf per LOD!
+            let mod = 0;
+            if (L >= 2) mod += (fbmWorld(wx * 0.7, wy * 0.7, 2) - 0.5) * 26;
+            if (L >= 4) mod += (hash2(Math.floor(wx * 4), Math.floor(wy * 4)) - 0.5) * 18;
+            if (L >= 6) {
+              const micro = hash2(Math.floor(wx / step), Math.floor(wy / step));
+              if (micro > 0.85) mod += 20;
+              else if (micro < 0.15) mod -= 18;
+              else if (micro > 0.494 && micro < 0.502 && g > 100) {
+                r += 45; g += 35; // Tiny wildflowers
+              }
+            }
+
+            // Trampled dirt clearing around active human tribes
+            if (L >= 5) {
+              for (const tr of simState.tribes) {
+                const c = latLonToWorld(tr.lat, tr.lon);
+                const d = Math.hypot(wx - c.x, wy - c.y);
+                if (d < 1.35) {
+                  const blend = 1 - Math.min(1, Math.max(0, (d - 0.5) / 0.85));
+                  const dirtNoise = (hash2(Math.floor(wx / step), Math.floor(wy / step)) - 0.5) * 22;
+                  r = r * (1 - blend * 0.75) + (125 + dirtNoise) * (blend * 0.75);
+                  g = g * (1 - blend * 0.75) + (90 + dirtNoise) * (blend * 0.75);
+                  b = b * (1 - blend * 0.75) + (55 + dirtNoise) * (blend * 0.75);
+                }
+              }
+            }
+
+            fr = Math.min(255, Math.max(0, r + mod));
+            fg = Math.min(255, Math.max(0, g + mod));
+            fb = Math.min(255, Math.max(0, b + mod));
+          }
+
+          pxOut[outIdx] = fr;
+          pxOut[outIdx + 1] = fg;
+          pxOut[outIdx + 2] = fb;
+          pxOut[outIdx + 3] = 255;
+        }
+      }
+
+      ctx.putImageData(imgData, 0, 0);
+      const tex = PIXI.Texture.from(canvas);
+      tex.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
+
+      const sp = new PIXI.Sprite(tex);
+      sp.x = x0;
+      sp.y = y0;
+      sp.width = tileWorldSize;
+      sp.height = tileWorldSize;
+      sp.zIndex = L;
+      sp.visible = false;
+      quadLayer.addChild(sp);
+
+      return sp;
+    }
+
+    function getOrCreateTile(L, tx, ty, immediate = false) {
+      const key = `${L}_${tx}_${ty}`;
+      if (tileCache.has(key)) {
+        const entry = tileCache.get(key);
+        entry.lastUsed = frameCounter;
+        return entry.sprite;
+      }
+      if (immediate) {
+        const sp = buildTileSprite(L, tx, ty);
+        tileCache.set(key, { sprite: sp, lastUsed: frameCounter, L });
+        return sp;
+      }
+      if (!queuedKeys.has(key)) {
+        queuedKeys.add(key);
+        genQueue.push({ L, tx, ty, key });
+      }
+      return null;
+    }
+
+    function invalidateHighLODTiles() {
+      for (const [key, entry] of tileCache.entries()) {
+        if (entry.L > 0) {
+          quadLayer.removeChild(entry.sprite);
+          entry.sprite.texture.destroy(true);
+          tileCache.delete(key);
+        } else {
+          // Rebuild LOD 0 too if biome globally changed
+          quadLayer.removeChild(entry.sprite);
+          entry.sprite.texture.destroy(true);
+          tileCache.delete(key);
+        }
+      }
+      genQueue.length = 0;
+      queuedKeys.clear();
+      if (texturesReady) {
+        for (let ty = 0; ty < 4; ty++) {
+          for (let tx = 0; tx < 8; tx++) {
+            getOrCreateTile(0, tx, ty, true);
           }
         }
       }
-      const tex = PIXI.Texture.from(c);
-      tex.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
-      return tex;
     }
 
-    const humanPalette = {
+    function updateQuadtree(zoom) {
+      if (!texturesReady) return 0;
+
+      // Choose LOD so each 128x128 tile fits ~180 to 340 screen pixels
+      const idealWorldSize = 240 / zoom;
+      let targetLOD = Math.round(Math.log2(512 / idealWorldSize));
+      targetLOD = Math.max(0, Math.min(9, targetLOD));
+
+      // Hide all cached sprites first
+      for (const entry of tileCache.values()) {
+        entry.sprite.visible = false;
+      }
+
+      const tileSize = 512 / Math.pow(2, targetLOD);
+      const maxCols = 8 * Math.pow(2, targetLOD);
+      const maxRows = 4 * Math.pow(2, targetLOD);
+
+      const startX = Math.max(0, Math.floor((-world.x / zoom) / tileSize));
+      const endX = Math.min(maxCols - 1, Math.floor(((window.innerWidth - world.x) / zoom) / tileSize));
+      const startY = Math.max(0, Math.floor((-world.y / zoom) / tileSize));
+      const endY = Math.min(maxRows - 1, Math.floor(((window.innerHeight - world.y) / zoom) / tileSize));
+
+      const centerWX = (window.innerWidth / 2 - world.x) / zoom;
+      const centerWY = (window.innerHeight / 2 - world.y) / zoom;
+
+      for (let ty = startY; ty <= endY; ty++) {
+        for (let tx = startX; tx <= endX; tx++) {
+          const sp = getOrCreateTile(targetLOD, tx, ty, false);
+          if (sp) {
+            sp.visible = true;
+          } else {
+            // Show closest available ancestor tile while child generates
+            for (let ancL = targetLOD - 1; ancL >= 0; ancL--) {
+              const shift = targetLOD - ancL;
+              const ax = tx >> shift;
+              const ay = ty >> shift;
+              const ancKey = `${ancL}_${ax}_${ay}`;
+              if (tileCache.has(ancKey)) {
+                const anc = tileCache.get(ancKey);
+                anc.sprite.visible = true;
+                anc.lastUsed = frameCounter;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      // Process up to 4 tiles per frame from priority queue
+      if (genQueue.length > 0) {
+        genQueue.sort((a, b) => {
+          const sA = 512 / Math.pow(2, a.L);
+          const sB = 512 / Math.pow(2, b.L);
+          const dA = Math.hypot((a.tx + 0.5)*sA - centerWX, (a.ty + 0.5)*sA - centerWY);
+          const dB = Math.hypot((b.tx + 0.5)*sB - centerWX, (b.ty + 0.5)*sB - centerWY);
+          return dA - dB;
+        });
+
+        let built = 0;
+        while (genQueue.length > 0 && built < 4) {
+          const job = genQueue.shift();
+          queuedKeys.delete(job.key);
+          if (job.L !== targetLOD) continue; // Discard stale LOD jobs
+          const sp = buildTileSprite(job.L, job.tx, job.ty);
+          sp.visible = true;
+          tileCache.set(job.key, { sprite: sp, lastUsed: frameCounter, L: job.L });
+          built++;
+        }
+      }
+
+      // LRU Eviction (keep max 280 tiles in RAM)
+      if (tileCache.size > 280) {
+        let oldestKey = null, oldestTime = Infinity;
+        for (const [k, v] of tileCache.entries()) {
+          if (v.L > 0 && v.lastUsed < oldestTime) {
+            oldestTime = v.lastUsed;
+            oldestKey = k;
+          }
+        }
+        if (oldestKey) {
+          const old = tileCache.get(oldestKey);
+          quadLayer.removeChild(old.sprite);
+          old.sprite.texture.destroy(true);
+          tileCache.delete(oldestKey);
+        }
+      }
+
+      return targetLOD;
+    }
+
+    // =========================================================
+    // 5. HIGH-DETAIL 8-BIT SPRITE MATRICES (HUMANS & WILDLIFE)
+    // =========================================================
+    function buildMatrixTex(rows, pal) {
+      const h = rows.length, w = rows[0].length;
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const ctx = c.getContext('2d');
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const ch = rows[y][x];
+          if (ch !== '.' && pal[ch]) { ctx.fillStyle = pal[ch]; ctx.fillRect(x, y, 1, 1); }
+        }
+      }
+      const t = PIXI.Texture.from(c);
+      t.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
+      return t;
+    }
+
+    const hPal = {
       'O': '#18100c', 'H': '#291d16', 'h': '#443227', 'G': '#9ca3af',
-      'S': '#c68642', 's': '#e0ac69', 'd': '#8d5524',
-      'W': '#f8fafc', 'E': '#0f172a',
-      'F': '#9a3412', 'f': '#c2410c', 'L': '#451a03',
-      'P': '#78350f', 'M': '#94a3b8', 'm': '#e2e8f0', 'B': '#d97706'
+      'S': '#c68642', 's': '#e0ac69', 'd': '#8d5524', 'W': '#f8fafc', 'E': '#0f172a',
+      'F': '#9a3412', 'f': '#c2410c', 'L': '#451a03', 'P': '#78350f', 'M': '#94a3b8', 'm': '#e2e8f0', 'B': '#d97706'
     };
 
-    const texHunter1 = buildSpriteFromMatrix([
-      '.............O......',
-      '............OMO.....',
-      '...........OMmO.....',
-      '......OOOOO.OMO.....',
-      '.....OHhhhHO.O......',
-      '....OHHHHHHHOOPO....',
-      '....OHssSssHOOPO....',
-      '....OHWEsEWHOOPO....',
-      '....O.SsdSs.O.P.....',
-      '.....OSSSSSO..P.....',
-      '......OdddO...P.....',
-      '....OOFFFFFOO.P.....',
-      '...OSOffffFFO.P.....',
-      '...OSOffFFFfO.P.....',
-      '...O.OFFLLFFOOPO....',
-      '.....OFFLLFFOSSO....',
-      '.....OFFLLFFO.P.....',
-      '......OFFFFO..P.....',
-      '......OFOOFO..P.....',
-      '.....OSSO.OSSO......',
-      '.....OSSO.OSSO......',
-      '.....OLLO..OLLO.....',
-      '....OLLO....OLLO....',
-      '....OOO......OOO....',
-    ], humanPalette);
+    const texHunter1 = buildMatrixTex([
+      '.............O......','............OMO.....','...........OMmO.....','......OOOOO.OMO.....',
+      '.....OHhhhHO.O......','....OHHHHHHHOOPO....','....OHssSssHOOPO....','....OHWEsEWHOOPO....',
+      '....O.SsdSs.O.P.....','.....OSSSSSO..P.....','......OdddO...P.....','....OOFFFFFOO.P.....',
+      '...OSOffffFFO.P.....','...OSOffFFFfO.P.....','...O.OFFLLFFOOPO....','.....OFFLLFFOSSO....',
+      '.....OFFLLFFO.P.....','......OFFFFO..P.....','......OFOOFO..P.....','.....OSSO.OSSO......',
+      '.....OLLO..OLLO.....','....OLLO....OLLO....','....OOO......OOO....'
+    ], hPal);
 
-    const texHunter2 = buildSpriteFromMatrix([
-      '.............O......',
-      '............OMO.....',
-      '...........OMmO.....',
-      '......OOOOO.OMO.....',
-      '.....OHhhhHO.O......',
-      '....OHHHHHHHOOPO....',
-      '....OHssSssHOOPO....',
-      '....OHWEsEWHOOPO....',
-      '....O.SsdSs.O.P.....',
-      '.....OSSSSSO..P.....',
-      '......OdddO...P.....',
-      '....OOFFFFFOO.P.....',
-      '...OSOffffFFO.P.....',
-      '...OSOffFFFfO.P.....',
-      '...O.OFFLLFFOOPO....',
-      '.....OFFLLFFOSSO....',
-      '.....OFFLLFFO.P.....',
-      '......OFFFFO..P.....',
-      '......OFOOFO..P.....',
-      '......OSSO.OSSO.....',
-      '......OSSO.OSSO.....',
-      '......OLLO.OLLO.....',
-      '.....OLLO...OLLO....',
-      '.....OOO.....OOO....',
-    ], humanPalette);
+    const texHunter2 = buildMatrixTex([
+      '.............O......','............OMO.....','...........OMmO.....','......OOOOO.OMO.....',
+      '.....OHhhhHO.O......','....OHHHHHHHOOPO....','....OHssSssHOOPO....','....OHWEsEWHOOPO....',
+      '....O.SsdSs.O.P.....','.....OSSSSSO..P.....','......OdddO...P.....','....OOFFFFFOO.P.....',
+      '...OSOffffFFO.P.....','...OSOffFFFfO.P.....','...O.OFFLLFFOOPO....','.....OFFLLFFOSSO....',
+      '.....OFFLLFFO.P.....','......OFFFFO..P.....','......OFOOFO..P.....','......OSSO.OSSO.....',
+      '......OLLO.OLLO.....','.....OLLO...OLLO....','.....OOO.....OOO....'
+    ], hPal);
 
-    const texGatherer = buildSpriteFromMatrix([
-      '......OOOO..........',
-      '.....OHhhhHO........',
-      '....OHHHHHHHO.......',
-      '....OHssSssHO.......',
-      '....OHWEsEWHO.......',
-      '....O.SsdSs.O.......',
-      '.....OSSSSSO........',
-      '......OdddO.........',
-      '....OOFFFFFOO.......',
-      '...OSOffffFFSO.OBBO.',
-      '...OSOffFFffSOOBBBBO',
-      '....O.FFLLFFOOBBBBBO',
-      '......FFLLFFOOBBBBO.',
-      '......OFFFFO..OOOO..',
-      '......OFFFFO........',
-      '......OFOOFO........',
-      '.....OSSO.OSSO......',
-      '.....OSSO.OSSO......',
-      '.....OLLO..OLLO.....',
-      '....OLLO....OLLO....',
-      '....OOO......OOO....',
-    ], humanPalette);
+    const texGatherer = buildMatrixTex([
+      '......OOOO..........','.....OHhhhHO........','....OHHHHHHHO.......','....OHssSssHO.......',
+      '....OHWEsEWHO.......','....O.SsdSs.O.......','.....OSSSSSO........','......OdddO.........',
+      '....OOFFFFFOO.......','...OSOffffFFSO.OBBO.','...OSOffFFffSOOBBBBO','....O.FFLLFFOOBBBBBO',
+      '......FFLLFFOOBBBBO.','......OFFFFO..OOOO..','......OFOOFO........','.....OSSO.OSSO......',
+      '.....OLLO..OLLO.....','....OLLO....OLLO....','....OOO......OOO....'
+    ], hPal);
 
-    const texElder = buildSpriteFromMatrix([
-      '..O.................',
-      '.OHO................',
-      '.OHO..OOOOO.........',
-      '.OHO.OGGGGGGO.......',
-      '.OHOOGGssSssGO......',
-      '.OHOOGGWEsEWGO......',
-      '.OHO.O.SsdSsO.......',
-      '.OPO..OGGGGGO.......',
-      '.OPO..OGGGGO........',
-      '.OPO.OOFFFFFOO......',
-      '.OPOOSOffffFFSO.....',
-      '.OPO.O.FFLLFFO......',
-      '.OPO...FFLLFFO......',
-      '.OPO...OFFFFO.......',
-      '.OPO...OFOOFO.......',
-      '.OPO...OSSO.OSSO....',
-      '.OPO...OLLO.OLLO....',
-      '.OOO...OOO...OOO....',
-    ], humanPalette);
+    const texElder = buildMatrixTex([
+      '..O.................','.OHO................','.OHO..OOOOO.........','.OHO.OGGGGGGO.......',
+      '.OHOOGGssSssGO......','.OHOOGGWEsEWGO......','.OHO.O.SsdSsO.......','.OPO..OGGGGGO.......',
+      '.OPO..OGGGGO........','.OPO.OOFFFFFOO......','.OPOOSOffffFFSO.....','.OPO.O.FFLLFFO......',
+      '.OPO...OFFFFO.......','.OPO...OFOOFO.......','.OPO...OSSO.OSSO....','.OPO...OLLO.OLLO....',
+      '.OOO...OOO...OOO....'
+    ], hPal);
 
-    const gazelleTex = buildSpriteFromMatrix([
-      '.............O.O....',
-      '............O...O...',
-      '...........O.O.O....',
-      '...........ODDDDDO..',
-      '..........ODDEWDDO..',
-      '...OOOOOO.ODDDDDDO..',
-      '..ODDDDDDODDDDOOO...',
-      '.ODDDDDDDDDDDDO.....',
-      '.OWWWWWWWWWWWDO.....',
-      '..O.O.....O.O.......',
-      '..O.O.....O.O.......',
-      '.O..O.....O..O......',
-      '.O..O.....O..O......',
+    // Wildlife Sprites
+    const texBearBrown = buildMatrixTex([
+      '....OO.......OO.....','...OBBOOOOOOOBBO....','..OBBBBBBBBBBBBBO...','..OBWEBBBBBBBEWBO...',
+      '..OBBBBBBBBBBBBBO...','..OBBBBOOOOOBBBBO...','.OBBBBBBBBBBBBBBBO..','OBBBBBBBBBBBBBBBBBO.',
+      'OBBBBBBBBBBBBBBBBBO.','OBBBBBBBBBBBBBBBBBO.','.OOBBBOOOOOOBBBOO...','..OBBO......OBBO....',
+      '..OBBO......OBBO....','..OOO........OOO....'
+    ], { 'O': '#1c120c', 'B': '#6b3e23', 'W': '#f8fafc', 'E': '#0f172a' });
+
+    const texBearPolar = buildMatrixTex([
+      '....OO.......OO.....','...OWWOOOOOOOWWO....','..OWWWWWWWWWWWWWO...','..OWWEWWWWWWWEWWO...',
+      '..OWWWWWWWWWWWWWO...','..OWWWWOOOOOWWWWO...','.OWWWWWWWWWWWWWWWOO.','OWWWWWWWWWWWWWWWWWO.',
+      'OWWWWWWWWWWWWWWWWWO.','OWWWWWWWWWWWWWWWWWO.','.OOWWWOOOOOOWWWOO...','..OWWO......OWWO....',
+      '..OWWO......OWWO....','..OOO........OOO....'
+    ], { 'O': '#64748b', 'W': '#f8fafc', 'E': '#0f172a' });
+
+    const texHorse = buildMatrixTex([
+      '..............OO....','.............OMMO...','............OMBBBO..','...........OMBBWEBO.',
+      '..........OMBBBBBO..','...OOOOOOOOMBBBOO...','..OMBBBBBBBBBO......','.OMBBBBBBBBBBBO.....',
+      '.O.OBBBBBBBBBO......','...OBBO...OBBO......','...OBBO...OBBO......','...O.O.....O.O......',
+      '...O.O.....O.O......'
+    ], { 'O': '#1e130c', 'B': '#9a4f23', 'M': '#291d16', 'W': '#f8fafc', 'E': '#0f172a' });
+
+    const texMammoth = buildMatrixTex([
+      '........OOOOOO..........','......OOBBBBBBOO........','....OOBBBBBBBBBBBO......',
+      '...OBBBBBBBBBBBBBBO.....','..OBBBBBBBBBBBBEWBO.OO..','..OBBBBBBBBBBBBBBBBOIIO.',
+      '.OBBBBBBBBBBBBBBBBBBOOIO','.OBBBBBBBBBBBBBBBBBO.IIO','.OBBBBBBBBBBBBBBBBO..OO.',
+      '..OBBBBBBBBBBBBBBO......','...OOBBBOOOOOBBBOO......','....OBBO....OBBO........',
+      '....OBBO....OBBO........','....OOO......OOO........'
+    ], { 'O': '#1e140f', 'B': '#5c3a21', 'I': '#fef3c7', 'W': '#f8fafc', 'E': '#0f172a' });
+
+    const texLion = buildMatrixTex([
+      '.............OOOOO..','............OMMMMMO.','...........OMGGGGGMO','..........OMGGWEWGMO',
+      '...OOOOOO..OMGGGGMO.','..OGGGGGGOOOMMMMMO..','.OGGGGGGGGGGGMOO....','.OGGGGGGGGGGGGO.....',
+      '..OGGGOOOOGGGO......','..OGGO....OGGO......','..OGGO....OGGO......','..OOO......OOO......'
+    ], { 'O': '#291d16', 'G': '#eab308', 'M': '#78350f', 'W': '#f8fafc', 'E': '#0f172a' });
+
+    const texGazelle = buildMatrixTex([
+      '.............O.O....','............O...O...','...........ODDDDDO..','..........ODDEWDDO..',
+      '...OOOOOO.ODDDDDDO..','..ODDDDDDODDDDOOO...','.ODDDDDDDDDDDDO.....','.OWWWWWWWWWWWDO.....',
+      '..O.O.....O.O.......','..O.O.....O.O.......'
     ], { 'O': '#291d16', 'D': '#d97706', 'W': '#fef3c7', 'E': '#0f172a' });
 
-    const acaciaTex = buildSpriteFromMatrix([
-      '........OOOOOOOOOOOOOO............',
-      '....OOOOLLLLLLLLLLLLLLOOOO........',
-      '..OOLLLLGGGGGGGGGGGGGGLLLLOO......',
-      '.OLGGGGGGGGGGGGGGGGGGGGGGGGLO.....',
-      'OLGGGGGGGGGGGGGGGGGGGGGGGGGGGO....',
-      'ODGGGGGGGDDDDDGGGGGGDDDDGGGGDDO...',
-      '.OODDDDDDDDDDDDDDDDDDDDDDDDDOO....',
-      '...OOOOOOOOOOOOOOOOOOOOOOOOOO.....',
-      '.......OOBOO......OOBBO...........',
-      '........OOBBO....OOBBO............',
-      '.........OOBBO..OOBBO.............',
-      '..........OOBBOOOBBO..............',
-      '...........OOBBBBBO...............',
-      '............OOBBBO................',
-      '............OOBBBO................',
-      '............OOBBBO................',
-      '............OOBBBO................',
-      '............OOBBBO................',
-      '............OOBBBO................',
-      '............OOBBBO................',
-      '...........OOBBBBBO...............',
-      '..........OOBBBBBBBBO.............',
-      '.........OOOOOOOOOOOOO............',
+    // Trees, Grass & Structures
+    const acaciaTex = buildMatrixTex([
+      '........OOOOOOOOOOOOOO............','....OOOOLLLLLLLLLLLLLLOOOO........',
+      '..OOLLLLGGGGGGGGGGGGGGLLLLOO......','.OLGGGGGGGGGGGGGGGGGGGGGGGGLO.....',
+      'OLGGGGGGGGGGGGGGGGGGGGGGGGGGGO....','ODGGGGGGGDDDDDGGGGGGDDDDGGGGDDO...',
+      '.OODDDDDDDDDDDDDDDDDDDDDDDDDOO....','...OOOOOOOOOOOOOOOOOOOOOOOOOO.....',
+      '.......OOBOO......OOBBO...........','........OOBBO....OOBBO............',
+      '.........OOBBO..OOBBO.............','..........OOBBOOOBBO..............',
+      '...........OOBBBBBO...............','............OOBBBO................',
+      '............OOBBBO................','............OOBBBO................',
+      '...........OOBBBBBO...............','..........OOOOOOOOO...............'
     ], { 'O': '#0f291e', 'L': '#86efac', 'G': '#22c55e', 'D': '#15803d', 'B': '#5c3a21' });
 
-    const jungleTex = buildSpriteFromMatrix([
-      '......OOOOOOOOOO........',
-      '....OOLLLLGGGGGGGOO.....',
-      '..OOLLLGGGGGGGGGGGGOO...',
-      '.OLLGGGGGGGGGGGDDDDGGO..',
-      'OLGGGGGGGDDDDDDDDDDDGGO.',
-      'OGGGGGDDDDDDDDDDDDDDDDO.',
-      'ODDDDDDDDDDDDDDDDDDDDDO.',
-      '.OODDDDDDDDDDDDDDDDDOO..',
-      '...OOOOOOOBBBBOOOOOOO...',
-      '........OOBBBBO.........',
-      '........OOBBBBO.........',
-      '........OOBBBBO.........',
-      '........OOBBBBO.........',
-      '.......OOBBBBBBO........',
-      '......OOOOOOOOOOO.......',
+    const jungleTex = buildMatrixTex([
+      '......OOOOOOOOOO........','....OOLLLLGGGGGGGOO.....','..OOLLLGGGGGGGGGGGGOO...',
+      '.OLLGGGGGGGGGGGDDDDGGO..','OLGGGGGGGDDDDDDDDDDDGGO.','OGGGGGDDDDDDDDDDDDDDDDO.',
+      'ODDDDDDDDDDDDDDDDDDDDDO.','.OODDDDDDDDDDDDDDDDDOO..','...OOOOOOOBBBBOOOOOOO...',
+      '........OOBBBBO.........','........OOBBBBO.........','.......OOBBBBBBO........',
+      '......OOOOOOOOOOO.......'
     ], { 'O': '#052e16', 'L': '#4ade80', 'G': '#16a34a', 'D': '#14532d', 'B': '#451a03' });
 
-    const pineTex = buildSpriteFromMatrix([
-      '.........OO.........',
-      '........OGGO........',
-      '.......OGDDGO.......',
-      '......OOODDOOO......',
-      '.......OGGGGO.......',
-      '......OGGDDDGO......',
-      '.....OGGDDDDDGO.....',
-      '....OOODDDDDDOOO....',
-      '.....OGGGGGGGGO.....',
-      '....OGGGDDDDDDGO....',
-      '...OGGGDDDDDDDDGO...',
-      '..OOOOODDDDDDOOOOO..',
-      '........OBBO........',
-      '........OBBO........',
-      '........OBBO........',
-      '.......OOOOOO.......',
+    const pineTex = buildMatrixTex([
+      '.........OO.........','........OGGO........','.......OGDDGO.......','......OOODDOOO......',
+      '.......OGGGGO.......','......OGGDDDGO......','.....OGGDDDDDGO.....','....OOODDDDDDOOO....',
+      '.....OGGGGGGGGO.....','....OGGGDDDDDDGO....','...OGGGDDDDDDDDGO...','..OOOOODDDDDDOOOOO..',
+      '........OBBO........','........OBBO........','.......OOOOOO.......'
     ], { 'O': '#022c22', 'G': '#10b981', 'D': '#065f46', 'B': '#451a03' });
 
-    const cactusTex = buildSpriteFromMatrix([
-      '....OOO......',
-      '...OGGGO.....',
-      '.OOGGGDO..OO.',
-      'OGGOGGDO.OGGO',
-      'OGDOGGDOOOGDO',
-      '.OOGGGDDDDDO.',
-      '...OGGDOOOOO.',
-      '...OGGDO.....',
-      '...OGGDO.....',
-      '...OOOOO.....',
+    const cactusTex = buildMatrixTex([
+      '....OOO......','...OGGGO.....','.OOGGGDO..OO.','OGGOGGDO.OGGO',
+      'OGDOGGDOOOGDO','.OOGGGDDDDDO.','...OGGDOOOOO.','...OGGDO.....','...OOOOO.....'
     ], { 'O': '#052e16', 'G': '#4ade80', 'D': '#15803d' });
 
-    const grassTex = buildSpriteFromMatrix([
-      '..O...O...',
-      '.OGO.OG..O',
-      '.OGDOOGDO.',
-      'OOGDDDDDO.',
-      '.OOOOOOO..',
+    const grassTex = buildMatrixTex([
+      '..O...O...','.OGO.OG..O','.OGDOOGDO.','OOGDDDDDO.','.OOOOOOO..'
     ], { 'O': '#14532d', 'G': '#84cc16', 'D': '#4d7c0f' });
 
-    const rockTex = buildSpriteFromMatrix([
-      '....OOOOO...',
-      '..OOLLLLLO..',
-      '.OLLMMMMMDO.',
-      'OLMMMMDDDDDO',
-      'ODDDDDDDDDDO',
-      '.OOOOOOOOOO.',
+    const rockTex = buildMatrixTex([
+      '....OOOOO...','..OOLLLLLO..','.OLLMMMMMDO.','OLMMMMDDDDDO','ODDDDDDDDDDO','.OOOOOOOOOO.'
     ], { 'O': '#1e293b', 'L': '#cbd5e1', 'M': '#94a3b8', 'D': '#475569' });
 
-    const hutTex = buildSpriteFromMatrix([
-      '.............O..O.............',
-      '............O.OO.O............',
-      '..........OOFFFFFFOO..........',
-      '........OOFFFFffffffOO........',
-      '......OOFFFFffffffFFFFOO......',
-      '....OOFFFFffffffffffFFFFOO....',
-      '...OFFFFffffffffffffffFFFFO...',
-      '..OFFFFffffffOOOOOOffffFFFFO..',
-      '.OFFFFfffffOOIIIIIIOOfffFFFFO.',
-      '.OFFFFffffOIIIIIIIIIIOffFFFFO.',
-      'OFFFFffffOIIIIIIIIIIIIOffFFFFO',
-      'OFFFFffffOIIIIIIIIIIIIOffFFFFO',
-      'OLLLLLLLLLOIIIIIIIIIIIOLLLLLLO',
-      'OOOOOOOOOOOOOOOOOOOOOOOOOOOOOO',
+    const hutTex = buildMatrixTex([
+      '.............O..O.............','............O.OO.O............','..........OOFFFFFFOO..........',
+      '........OOFFFFffffffOO........','......OOFFFFffffffFFFFOO......','....OOFFFFffffffffffFFFFOO....',
+      '...OFFFFffffffffffffffFFFFO...','..OFFFFffffffOOOOOOffffFFFFO..','.OFFFFfffffOOIIIIIIOOfffFFFFO.',
+      '.OFFFFffffOIIIIIIIIIIOffFFFFO.','OFFFFffffOIIIIIIIIIIIIOffFFFFO','OLLLLLLLLLOIIIIIIIIIIIOLLLLLLO',
+      'OOOOOOOOOOOOOOOOOOOOOOOOOOOOOO'
     ], { 'O': '#1c1917', 'F': '#9a3412', 'f': '#c2410c', 'L': '#78350f', 'I': '#0c0a09' });
 
+    const rackTex = buildMatrixTex([
+      '.O..........O.','.OBOOOOOOOOOBO','.OBBBBBBBBBBO.','.OB.ORRRRO.BO.',
+      '.OB.ORssRO.BO.','.OB.ORRRRO.BO.','.OB........BO.','.OO........OO.'
+    ], { 'O': '#1c1917', 'B': '#78350f', 'R': '#dc2626', 's': '#fca5a5' });
+
+    // Warm Radial Glow Texture for Nighttime Campfires
+    const glowCanvas = document.createElement('canvas');
+    glowCanvas.width = 128; glowCanvas.height = 128;
+    const gctx = glowCanvas.getContext('2d');
+    const grad = gctx.createRadialGradient(64, 64, 4, 64, 64, 64);
+    grad.addColorStop(0, 'rgba(255, 160, 50, 0.9)');
+    grad.addColorStop(0.4, 'rgba(249, 115, 22, 0.45)');
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    gctx.fillStyle = grad;
+    gctx.fillRect(0, 0, 128, 128);
+    const fireGlowTex = PIXI.Texture.from(glowCanvas);
+
     // =========================================================
-    // 5. PROCEDURAL VIEWPORT TREE & GROUND FOLIAGE POOLS
+    // 6. DENSE BIOME FOLIAGE POOLS (FILLS EVERYTHING UP!)
     // =========================================================
-    const TREE_POOL_SIZE = 1200;
+    const TREE_POOL_SIZE = 2200;
     const treePool = [];
     for (let i = 0; i < TREE_POOL_SIZE; i++) {
       const sp = new PIXI.Sprite(acaciaTex);
       sp.anchor.set(0.5, 0.9);
       sp.visible = false;
-      treeLayer.addChild(sp);
+      treesLayer.addChild(sp);
       treePool.push(sp);
     }
 
-    const PROP_POOL_SIZE = 800;
+    const PROP_POOL_SIZE = 1800;
     const propPool = [];
     for (let i = 0; i < PROP_POOL_SIZE; i++) {
       const sp = new PIXI.Sprite(grassTex);
       sp.anchor.set(0.5, 0.9);
       sp.visible = false;
-      microPropsLayer.addChild(sp);
+      propsLayer.addChild(sp);
       propPool.push(sp);
     }
 
-    function hash2D(x, y) {
-      let n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453123;
-      return n - Math.floor(n);
-    }
+    function updateDenseEcosystem(zoom) {
+      if (!texturesReady) return;
 
-    function updateProceduralFoliage(zoom) {
-      // Trees fade in smoothly between 38x and 95x zoom
-      const treeAlpha = Math.max(0, Math.min(1, (zoom - 38) / 57));
-      treeLayer.alpha = treeAlpha;
+      // Dense Trees fade in between 32x and 85x
+      const treeAlpha = Math.max(0, Math.min(1, (zoom - 32) / 53));
+      treesLayer.alpha = treeAlpha;
 
       if (treeAlpha <= 0.01) {
         for (let i = 0; i < TREE_POOL_SIZE; i++) treePool[i].visible = false;
       } else {
-        const CELL = 1.25;
+        const CELL = 0.72; // Super dense!
         const startX = Math.max(0, Math.floor((-world.x / zoom) / CELL) - 1);
         const endX = Math.min(Math.floor(MAP_WIDTH / CELL), Math.ceil(((window.innerWidth - world.x) / zoom) / CELL) + 1);
         const startY = Math.max(0, Math.floor((-world.y / zoom) / CELL) - 1);
@@ -900,35 +973,37 @@
         let idx = 0;
         for (let cy = startY; cy <= endY && idx < TREE_POOL_SIZE; cy++) {
           for (let cx = startX; cx <= endX && idx < TREE_POOL_SIZE; cx++) {
-            const h1 = hash2D(cx, cy);
-            const wx = (cx + h1 * 0.8) * CELL;
-            const wy = (cy + hash2D(cx + 13, cy + 7) * 0.8) * CELL;
+            const h1 = hash2(cx, cy);
+            const wx = (cx + h1 * 0.85) * CELL;
+            const wy = (cy + hash2(cx + 17, cy + 9) * 0.85) * CELL;
 
-            // Keep camp clearing open
-            if (Math.hypot(wx - CAMP_POS.x, wy - CAMP_POS.y) < 1.6) continue;
+            // Keep human tribe clearings open
+            let inClearing = false;
+            for (const tr of simState.tribes) {
+              const c = latLonToWorld(tr.lat, tr.lon);
+              if (Math.hypot(wx - c.x, wy - c.y) < 1.4) { inClearing = true; break; }
+            }
+            if (inClearing) continue;
 
-            // Map 4096x2048 world coordinates to 2048x1024 biomeGrid
             const gx = Math.min(DATA_W - 1, Math.max(0, Math.floor(wx * 0.5)));
             const gy = Math.min(DATA_H - 1, Math.max(0, Math.floor(wy * 0.5)));
-            const b = biomeGrid[gy * DATA_W + gx];
+            let b = biomeGrid[gy * DATA_W + gx];
+            if (simState.saharaGreen && wx > 1800 && wx < 2600 && wy > 640 && wy < 880 && b !== 0) b = 4;
 
             if (b === 0 || b === 7) continue;
 
-            let chance = 0;
-            let tex = acaciaTex;
-            if (b === 5) { chance = 0.68; tex = jungleTex; }
-            else if (b === 4) { chance = 0.44; tex = (wy < 600 || wy > 1440) ? pineTex : jungleTex; }
-            else if (b === 3) { chance = 0.25; tex = acaciaTex; }
-            else if (b === 2) { chance = 0.06; tex = cactusTex; }
-            else if (b === 6) { chance = 0.14; tex = pineTex; }
+            let chance = 0, tex = acaciaTex;
+            if (b === 5) { chance = 0.88; tex = jungleTex; }
+            else if (b === 4) { chance = 0.70; tex = (wy < 600 || wy > 1440) ? pineTex : jungleTex; }
+            else if (b === 3) { chance = 0.42; tex = acaciaTex; }
+            else if (b === 2) { chance = 0.08; tex = cactusTex; }
+            else if (b === 6) { chance = 0.28; tex = pineTex; }
 
             if (h1 < chance) {
               const sp = treePool[idx++];
               sp.texture = tex;
-              sp.x = wx;
-              sp.y = wy;
-              const sizeVar = 0.85 + hash2D(cx * 3, cy * 5) * 0.35;
-              sp.scale.set(0.0085 * sizeVar);
+              sp.x = wx; sp.y = wy;
+              sp.scale.set(0.0085 * (0.82 + hash2(cx * 3, cy * 5) * 0.36));
               sp.visible = true;
             }
           }
@@ -936,14 +1011,14 @@
         for (let i = idx; i < TREE_POOL_SIZE; i++) treePool[i].visible = false;
       }
 
-      // Micro props (grass tufts & boulders): fade in between 120x and 220x zoom
-      const propAlpha = Math.max(0, Math.min(1, (zoom - 120) / 100));
-      microPropsLayer.alpha = propAlpha;
+      // Dense Grass Tufts, Bushes & Rocks (zoom 95x -> 190x)
+      const propAlpha = Math.max(0, Math.min(1, (zoom - 95) / 95));
+      propsLayer.alpha = propAlpha;
 
       if (propAlpha <= 0.01) {
         for (let i = 0; i < PROP_POOL_SIZE; i++) propPool[i].visible = false;
       } else {
-        const PCELL = 0.38;
+        const PCELL = 0.24; // Dense blanket of grass tufts!
         const startX = Math.max(0, Math.floor((-world.x / zoom) / PCELL) - 1);
         const endX = Math.min(Math.floor(MAP_WIDTH / PCELL), Math.ceil(((window.innerWidth - world.x) / zoom) / PCELL) + 1);
         const startY = Math.max(0, Math.floor((-world.y / zoom) / PCELL) - 1);
@@ -952,11 +1027,11 @@
         let idx = 0;
         for (let cy = startY; cy <= endY && idx < PROP_POOL_SIZE; cy++) {
           for (let cx = startX; cx <= endX && idx < PROP_POOL_SIZE; cx++) {
-            const h = hash2D(cx + 500, cy + 500);
-            if (h > 0.28) continue;
+            const h = hash2(cx + 500, cy + 500);
+            if (h > 0.58) continue;
 
-            const wx = (cx + hash2D(cx, cy)) * PCELL;
-            const wy = (cy + hash2D(cx + 9, cy + 4)) * PCELL;
+            const wx = (cx + hash2(cx, cy)) * PCELL;
+            const wy = (cy + hash2(cx + 9, cy + 4)) * PCELL;
 
             const gx = Math.min(DATA_W - 1, Math.max(0, Math.floor(wx * 0.5)));
             const gy = Math.min(DATA_H - 1, Math.max(0, Math.floor(wy * 0.5)));
@@ -964,10 +1039,9 @@
             if (b === 0) continue;
 
             const sp = propPool[idx++];
-            sp.texture = (h < 0.08 || b === 2 || b === 6) ? rockTex : grassTex;
-            sp.x = wx;
-            sp.y = wy;
-            sp.scale.set(0.0036);
+            sp.texture = (h < 0.10 || b === 2 || b === 6) ? rockTex : grassTex;
+            sp.x = wx; sp.y = wy;
+            sp.scale.set(0.0038);
             sp.visible = true;
           }
         }
@@ -976,119 +1050,456 @@
     }
 
     // =========================================================
-    // 6. CREATE THE 300,000 BCE RIFT VALLEY CAMP
+    // 7. CAMPS, HUMANS, HUNTS, WILDLIFE & "SHOW ON MAP" PINS
     // =========================================================
-    const campEntities = [];
-    const smokeParticles = [];
-    let fireGraphic = new PIXI.Graphics();
+    const humanAgents = [];
+    const wildAnimals = [];
+    const campVisuals = []; // Stores hearth, fireGlow, smoke, huts per tribe
+    const gazelles = [];
 
-    function buildCamp(center) {
-      const hutOffsets = [
-        { dx: -0.75, dy: -0.55 },
-        { dx: 0.78, dy: -0.45 },
-        { dx: -0.45, dy: 0.72 }
-      ];
-      hutOffsets.forEach(o => {
-        const hut = new PIXI.Sprite(hutTex);
-        hut.anchor.set(0.5, 0.85);
-        hut.x = center.x + o.dx;
-        hut.y = center.y + o.dy;
-        hut.scale.set(0.0072);
-        campLayer.addChild(hut);
-      });
+    function spawnTribeOnMap(tribe) {
+      const center = latLonToWorld(tribe.lat, tribe.lon);
 
-      campLayer.addChild(fireGraphic);
+      // Unlit / Lit Hearth
+      const hearth = new PIXI.Graphics();
+      campLayer.addChild(hearth);
 
-      for (let i = 0; i < 16; i++) {
+      // Firelight Glow Sprite (visible at night when lit)
+      const fireGlow = new PIXI.Sprite(fireGlowTex);
+      fireGlow.anchor.set(0.5);
+      fireGlow.x = center.x; fireGlow.y = center.y;
+      fireGlow.scale.set(0.025);
+      fireGlow.blendMode = PIXI.BLEND_MODES.ADD;
+      fireGlow.visible = tribe.fireLit;
+      nightWorldGlowLayer.addChild(fireGlow);
+
+      // Smoke particles
+      const smoke = [];
+      for (let i = 0; i < 12; i++) {
         const p = new PIXI.Graphics();
-        p.beginFill(0xcbd5e1, 0.65);
-        p.drawRect(-0.008, -0.008, 0.02, 0.02);
-        p.endFill();
-        p.x = center.x; p.y = center.y - 0.03;
-        p.alpha = Math.random();
-        p.life = Math.random();
-        smokeParticles.push(p);
+        p.beginFill(0xcbd5e1, 0.65); p.drawRect(-0.008, -0.008, 0.02, 0.02); p.endFill();
+        p.x = center.x; p.y = center.y - 0.03; p.life = Math.random(); p.visible = tribe.fireLit;
         campLayer.addChild(p);
+        smoke.push(p);
       }
 
-      const names = ["Kael", "Mara", "Orin", "Zuri", "Tark", "Sora", "Bram", "Nia", "Daro", "Luma", "Vek", "Rhea", "Kora", "Garr", "Tali", "Jor"];
-      for (let i = 0; i < 16; i++) {
-        const role = i === 0 ? "Firekeeper" : (i % 2 === 0 ? "Hunter" : "Gatherer");
-        const container = new PIXI.Container();
+      const hutGroup = new PIXI.Container();
+      campLayer.addChild(hutGroup);
 
-        const shadow = new PIXI.Graphics();
-        shadow.beginFill(0x000000, 0.38);
-        shadow.drawEllipse(0, 0, 0.035, 0.015);
-        shadow.endFill();
-        container.addChild(shadow);
+      const rack = new PIXI.Sprite(rackTex);
+      rack.anchor.set(0.5, 0.9);
+      rack.x = center.x + 0.35; rack.y = center.y + 0.25;
+      rack.scale.set(0.0045);
+      rack.visible = false;
+      campLayer.addChild(rack);
 
-        const tex = role === "Firekeeper" ? texElder : (role === "Hunter" ? texHunter1 : texGatherer);
-        const sp = new PIXI.Sprite(tex);
-        sp.anchor.set(0.5, 0.95);
-        sp.scale.set(0.0040); // Crisp ~40px tall at 450x zoom
-        container.addChild(sp);
+      campVisuals.push({ tribe, center, hearth, fireGlow, smoke, hutGroup, rack });
 
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 0.15 + Math.random() * 1.1;
-        container.x = center.x + Math.cos(angle) * dist;
-        container.y = center.y + Math.sin(angle) * dist;
-
-        container.eventMode = 'static';
-        container.cursor = 'pointer';
-        const personName = names[i % names.length];
-        container.on('pointerdown', (e) => {
-          e.stopPropagation();
-          const card = document.getElementById('inspector-card');
-          card.style.display = 'block';
-          card.innerHTML = `<strong style="color:var(--accent);">${personName}</strong> (${role})<br><span style="color:#94a3b8;">Homo sapiens • 300,000 BCE<br>Status: Foraging & tending camp</span>`;
-        });
-
-        campLayer.addChild(container);
-        campEntities.push({
-          container, sprite: sp, role, home: center,
-          targetX: container.x, targetY: container.y,
-          waitTimer: Math.random() * 120, animTimer: Math.random() * 10
-        });
+      // Spawn Humans for this tribe
+      for (let i = 0; i < 14; i++) {
+        addHumanToTribe(tribe, center, i === 0 ? "Firekeeper" : (i % 2 === 0 ? "Hunter" : "Gatherer"));
       }
 
+      // Spawn Gazelle herd nearby for hunting
       for (let i = 0; i < 6; i++) {
-        const g = new PIXI.Sprite(gazelleTex);
+        const g = new PIXI.Sprite(texGazelle);
         g.anchor.set(0.5, 0.9);
         g.scale.set(0.0038);
-        g.x = center.x + 2.1 + Math.random() * 1.4;
-        g.y = center.y - 0.8 + Math.random() * 1.6;
-        campLayer.addChild(g);
-        campEntities.push({
-          container: g, sprite: g, role: "Wildlife",
-          home: { x: center.x + 2.5, y: center.y },
-          targetX: g.x, targetY: g.y,
-          waitTimer: Math.random() * 180, animTimer: 0
-        });
+        g.x = center.x + (Math.random() > 0.5 ? 1.5 : -1.5) + (Math.random() - 0.5) * 0.6;
+        g.y = center.y + (Math.random() - 0.5) * 1.2;
+        entitiesLayer.addChild(g);
+        gazelles.push({ sprite: g, home: { x: g.x, y: g.y }, tx: g.x, ty: g.y, wait: 0, alive: true });
       }
     }
 
-    buildCamp(CAMP_POS);
+    function addHumanToTribe(tribe, center, role) {
+      const sp = new PIXI.Sprite(role === "Firekeeper" ? texElder : (role === "Hunter" ? texHunter1 : texGatherer));
+      sp.anchor.set(0.5, 0.95);
+      sp.scale.set(0.0040);
+      const a = Math.random() * Math.PI * 2, r = 0.1 + Math.random() * 0.8;
+      sp.x = center.x + Math.cos(a) * r;
+      sp.y = center.y + Math.sin(a) * r;
+      campLayer.addChild(sp);
 
-    const beacon = new PIXI.Graphics();
-    beaconLayer.addChild(beacon);
+      humanAgents.push({
+        sprite: sp, role, home: center, tribe,
+        targetX: sp.x, targetY: sp.y,
+        wait: Math.random() * 80, anim: 0,
+        huntingTarget: null
+      });
+    }
+
+    function populateHistoricalWildlife() {
+      // Clear previous wildlife
+      wildAnimals.forEach(w => entitiesLayer.removeChild(w.sprite));
+      wildAnimals.length = 0;
+
+      // Spawn actual roaming animal sprites inside each active historical zone!
+      // Bears
+      SPECIES_ZONES.bears.forEach(z => {
+        const c = latLonToWorld(z.lat, z.lon);
+        for (let i = 0; i < 6; i++) {
+          const sp = new PIXI.Sprite(z.variant === "polar" ? texBearPolar : texBearBrown);
+          sp.anchor.set(0.5, 0.9); sp.scale.set(0.0048);
+          sp.x = c.x + (Math.random() - 0.5) * 1.8; sp.y = c.y + (Math.random() - 0.5) * 1.8;
+          entitiesLayer.addChild(sp);
+          wildAnimals.push({ type: "bears", sprite: sp, home: c, tx: sp.x, ty: sp.y, wait: Math.random()*100 });
+        }
+      });
+
+      // Horses (Filtered by historical era!)
+      SPECIES_ZONES.horses.forEach(z => {
+        if (z.region === "Americas" && !simState.horsesInAmericas) return;
+        const c = latLonToWorld(z.lat, z.lon);
+        for (let i = 0; i < 8; i++) {
+          const sp = new PIXI.Sprite(texHorse);
+          sp.anchor.set(0.5, 0.9); sp.scale.set(0.0045);
+          sp.x = c.x + (Math.random() - 0.5) * 2.0; sp.y = c.y + (Math.random() - 0.5) * 2.0;
+          entitiesLayer.addChild(sp);
+          wildAnimals.push({ type: "horses", sprite: sp, home: c, tx: sp.x, ty: sp.y, wait: Math.random()*100 });
+        }
+      });
+
+      // Mammoths
+      if (simState.mammothsAlive) {
+        SPECIES_ZONES.mammoths.forEach(z => {
+          const c = latLonToWorld(z.lat, z.lon);
+          for (let i = 0; i < 5; i++) {
+            const sp = new PIXI.Sprite(texMammoth);
+            sp.anchor.set(0.5, 0.9); sp.scale.set(0.0062);
+            sp.x = c.x + (Math.random() - 0.5) * 2.2; sp.y = c.y + (Math.random() - 0.5) * 2.2;
+            entitiesLayer.addChild(sp);
+            wildAnimals.push({ type: "mammoths", sprite: sp, home: c, tx: sp.x, ty: sp.y, wait: Math.random()*100 });
+          }
+        });
+      }
+
+      // Lions
+      SPECIES_ZONES.lions.forEach(z => {
+        const c = latLonToWorld(z.lat, z.lon);
+        for (let i = 0; i < 5; i++) {
+          const sp = new PIXI.Sprite(texLion);
+          sp.anchor.set(0.5, 0.9); sp.scale.set(0.0045);
+          sp.x = c.x + (Math.random() - 0.5) * 2.0; sp.y = c.y + (Math.random() - 0.5) * 2.0;
+          entitiesLayer.addChild(sp);
+          wildAnimals.push({ type: "lions", sprite: sp, home: c, tx: sp.x, ty: sp.y, wait: Math.random()*100 });
+        }
+      });
+
+      updateTrackerCounts();
+    }
+
+    // Build clickable "SHOW ON MAP" Pin Sprites
+    const activePins = [];
+    function rebuildMapPins() {
+      pinLayer.removeChildren();
+      activePins.length = 0;
+
+      function addPin(lat, lon, color, label, flyZoom = 220) {
+        const pos = latLonToWorld(lat, lon);
+        const cont = new PIXI.Container();
+        cont.x = pos.x; cont.y = pos.y;
+        cont.eventMode = 'static';
+        cont.cursor = 'pointer';
+
+        const dot = new PIXI.Graphics();
+        dot.lineStyle(2, 0xffffff, 0.9);
+        dot.beginFill(color, 0.85);
+        dot.drawCircle(0, 0, 8);
+        dot.endFill();
+
+        const txt = new PIXI.Text(label, {
+          fontFamily: 'monospace', fontSize: 11, fontWeight: 'bold',
+          fill: 0xffffff, stroke: 0x020617, strokeThickness: 3
+        });
+        txt.anchor.set(0.5, 1.5);
+        cont.addChild(dot, txt);
+
+        cont.on('pointerdown', (e) => {
+          e.stopPropagation();
+          flyTo(pos.x, pos.y, flyZoom, 1800);
+        });
+
+        pinLayer.addChild(cont);
+        activePins.push(cont);
+      }
+
+      if (simState.trackers.humans) {
+        simState.tribes.forEach(t => addPin(t.lat, t.lon, 0x38bdf8, `👤 ${t.name}`, 260));
+      }
+      if (simState.trackers.bears) {
+        SPECIES_ZONES.bears.forEach(z => addPin(z.lat, z.lon, 0xd97706, `🐻 ${z.name}`, 200));
+      }
+      if (simState.trackers.horses) {
+        SPECIES_ZONES.horses.forEach(z => {
+          if (z.region === "Americas" && !simState.horsesInAmericas) return;
+          addPin(z.lat, z.lon, 0x22c55e, `🐎 ${z.name}`, 200);
+        });
+      }
+      if (simState.trackers.mammoths && simState.mammothsAlive) {
+        SPECIES_ZONES.mammoths.forEach(z => addPin(z.lat, z.lon, 0xa855f7, `🦣 ${z.name}`, 200));
+      }
+      if (simState.trackers.lions) {
+        SPECIES_ZONES.lions.forEach(z => addPin(z.lat, z.lon, 0xfbbf24, `🦁 ${z.name}`, 200));
+      }
+    }
+
+    function updateTrackerCounts() {
+      document.getElementById('cnt-humans').innerText = simState.tribes.length;
+      document.getElementById('cnt-bears').innerText = SPECIES_ZONES.bears.length;
+
+      const horseZones = SPECIES_ZONES.horses.filter(z => z.region !== "Americas" || simState.horsesInAmericas);
+      document.getElementById('cnt-horses').innerText = horseZones.length;
+
+      document.getElementById('cnt-mammoths').innerText = simState.mammothsAlive ? SPECIES_ZONES.mammoths.length : "Extinct";
+      document.getElementById('cnt-lions').innerText = SPECIES_ZONES.lions.length;
+
+      const note = document.getElementById('tracker-note');
+      if (!simState.horsesInAmericas) {
+        note.innerText = "🐎 Horses extinct in Americas until 1500 CE Columbian Exchange.";
+      } else {
+        note.innerText = "Click any glowing map pin to fly straight there.";
+      }
+    }
+
+    window.toggleTracker = function(type) {
+      simState.trackers[type] = !simState.trackers[type];
+      document.getElementById(`tog-${type}`).classList.toggle('active', simState.trackers[type]);
+      rebuildMapPins();
+    };
+
+    // Init starting tribe & animals
+    spawnTribeOnMap(simState.tribes[0]);
+    populateHistoricalWildlife();
+    rebuildMapPins();
 
     // =========================================================
-    // 7. CAMERA, BOUNDARY CLAMPING & LOGARITHMIC DIVE
+    // 8. VISUAL INTERACTIVE TASKS & CHRONOS LEAP
+    // =========================================================
+    function showToast(msg, duration = 4500) {
+      const t = document.getElementById('chronicle-toast');
+      t.innerHTML = msg;
+      t.style.display = 'block';
+      clearTimeout(t._timer);
+      t._timer = setTimeout(() => t.style.display = 'none', duration);
+    }
+
+    function checkEraComplete() {
+      const ready = simState.fireLit && simState.huntsDone >= simState.huntsNeeded && simState.shelterBuilt;
+      const btn = document.getElementById('leap-btn');
+      btn.classList.toggle('unlocked', ready);
+      btn.innerText = ready ? "⚡ CHRONOS LEAP READY!" : "⚡ CHRONOS LEAP";
+    }
+
+    window.actionSparkFire = function() {
+      if (simState.fireLit) return;
+      simState.fireLit = true;
+      simState.tribes.forEach(t => t.fireLit = true);
+      campVisuals.forEach(cv => {
+        cv.fireGlow.visible = true;
+        cv.smoke.forEach(s => s.visible = true);
+      });
+
+      const card = document.getElementById('task-fire');
+      card.classList.add('done');
+      document.getElementById('task-fire-txt').innerText = "Fire Ignited ✓";
+      showToast("🔥 <strong>Controlled Fire Sparked!</strong> Your clan gathers around the glowing hearth, safe from nighttime predators.");
+      tryBuildShelter();
+      checkEraComplete();
+    };
+
+    window.actionSendHunt = function() {
+      if (simState.huntsDone >= simState.huntsNeeded) return;
+
+      // Send 2 hunters directly after the nearest alive gazelle!
+      const hunters = humanAgents.filter(h => h.role === "Hunter");
+      const target = gazelles.find(g => g.alive);
+      if (hunters.length > 0 && target) {
+        hunters.slice(0, 2).forEach(h => { h.huntingTarget = target; h.wait = 0; });
+        showToast("🏹 <strong>Hunting Party Dispatched!</strong> Watch your hunters stalk the gazelle herd.");
+      } else {
+        completeSingleHunt();
+      }
+    };
+
+    function completeSingleHunt() {
+      if (simState.huntsDone >= simState.huntsNeeded) return;
+      simState.huntsDone++;
+      document.getElementById('task-hunt-txt').innerText = `Hunt Gazelle (${simState.huntsDone}/${simState.huntsNeeded})`;
+
+      if (simState.huntsDone >= simState.huntsNeeded) {
+        document.getElementById('task-hunt').classList.add('done');
+        document.getElementById('task-hunt-txt').innerText = "Food Secured ✓";
+        campVisuals.forEach(cv => cv.rack.visible = true);
+        tryBuildShelter();
+      }
+      checkEraComplete();
+    }
+
+    function tryBuildShelter() {
+      if (simState.fireLit && simState.huntsDone >= simState.huntsNeeded && !simState.shelterBuilt) {
+        simState.shelterBuilt = true;
+        campVisuals.forEach(cv => {
+          const offsets = [{ dx: -0.55, dy: -0.35 }, { dx: 0.55, dy: -0.3 }, { dx: -0.3, dy: 0.52 }];
+          offsets.forEach(o => {
+            const h = new PIXI.Sprite(hutTex);
+            h.anchor.set(0.5, 0.85); h.scale.set(0.0072);
+            h.x = cv.center.x + o.dx; h.y = cv.center.y + o.dy;
+            cv.hutGroup.addChild(h);
+          });
+          // Spawn 4 new clan members
+          for (let i = 0; i < 4; i++) addHumanToTribe(cv.tribe, cv.center, "Hunter");
+        });
+        document.getElementById('task-clan').classList.add('done');
+        document.getElementById('task-clan-txt').innerText = "Shelters Built ✓";
+        showToast("🛖 <strong>Settlement Established!</strong> Your thriving clan constructs hide shelters. <strong>⚡ CHRONOS LEAP</strong> is now unlocked!");
+        checkEraComplete();
+      }
+    }
+
+    // Chronos Leap across Real Historical Eras
+    document.getElementById('leap-btn').addEventListener('click', () => {
+      if (!(simState.fireLit && simState.huntsDone >= simState.huntsNeeded && simState.shelterBuilt)) {
+        showToast("⚠️ Complete the visual camp tasks in the bottom bar first (Spark Fire + 3 Hunts)!");
+        return;
+      }
+      if (simState.eraIndex >= ERAS.length - 1) {
+        showToast("🌍 You have reached 1500 CE! Use <strong>⚡ AI Intervene</strong> to explore alternate timelines.");
+        return;
+      }
+
+      simState.eraIndex++;
+      const era = ERAS[simState.eraIndex];
+      simState.year = era.year;
+      simState.isCE = !!era.isCE;
+
+      document.getElementById('era-label').innerText = era.name;
+      document.getElementById('year-label').innerText = era.label;
+      document.getElementById('pop-label').innerText = era.pop;
+
+      // Apply Historical Transitions!
+      if (era.year === 70000) {
+        // Out of Africa into Arabia & India
+        const newTribes = [
+          { name: "Levantine Corridor", lat: 31.5, lon: 35.5, fireLit: true, huts: 3 },
+          { name: "Indus Coast", lat: 24.5, lon: 68.0, fireLit: true, huts: 3 }
+        ];
+        newTribes.forEach(t => { simState.tribes.push(t); spawnTribeOnMap(t); });
+        flyTo(latLonToWorld(31.5, 35.5).x, latLonToWorld(31.5, 35.5).y, 180, 2200);
+        showToast("⚡ <strong>70,000 BCE: Out of Africa!</strong> Humans cross the Red Sea into the Levant and coastal India.");
+      }
+      else if (era.year === 12000) {
+        // Ice Age crossings into Europe, East Asia & North America
+        const newTribes = [
+          { name: "Danube Hunters", lat: 47.0, lon: 16.0, fireLit: true, huts: 3 },
+          { name: "Yellow River", lat: 35.0, lon: 112.0, fireLit: true, huts: 3 },
+          { name: "Clovis Plains", lat: 39.0, lon: -102.0, fireLit: true, huts: 3 }
+        ];
+        newTribes.forEach(t => { simState.tribes.push(t); spawnTribeOnMap(t); });
+        flyTo(latLonToWorld(39.0, -102.0).x, latLonToWorld(39.0, -102.0).y, 140, 2200);
+        showToast("⚡ <strong>12,000 BCE: Ice Age Crossings!</strong> Tribes spread across Europe, East Asia, and the Americas.");
+      }
+      else if (era.year === 4000) {
+        // Dawn of Civilization: Mammoths extinct, Horses extinct in Americas!
+        simState.horsesInAmericas = false;
+        simState.mammothsAlive = false;
+        const mesopotamia = { name: "Sumer (Mesopotamia)", lat: 31.3, lon: 45.6, fireLit: true, huts: 3 };
+        simState.tribes.push(mesopotamia);
+        spawnTribeOnMap(mesopotamia);
+        flyTo(latLonToWorld(31.3, 45.6).x, latLonToWorld(31.3, 45.6).y, 180, 2200);
+        showToast("⚡ <strong>4,000 BCE: Mesopotamia!</strong> Cities rise. Mammoths go extinct, and horses vanish from the Americas!");
+      }
+      else if (era.year === 1500) {
+        // Columbian Exchange: Horses return to the Americas!
+        simState.horsesInAmericas = true;
+        const mesoamerica = { name: "Tenochtitlan", lat: 19.4, lon: -99.1, fireLit: true, huts: 3 };
+        simState.tribes.push(mesoamerica);
+        spawnTribeOnMap(mesoamerica);
+        flyTo(latLonToWorld(32.0, -98.0).x, latLonToWorld(32.0, -98.0).y, 100, 2200);
+        showToast("⚡ <strong>1500 CE: The Columbian Exchange!</strong> European vessels cross the Atlantic—horses return to the Americas!");
+      }
+
+      invalidateHighLODTiles();
+      populateHistoricalWildlife();
+      rebuildMapPins();
+    });
+
+    // =========================================================
+    // 9. REAL AI INTERVENTION BACKEND CONNECTION (/api/turn)
+    // =========================================================
+    document.getElementById('btn-intervene').onclick = () => {
+      document.getElementById('intervention-modal').style.display = 'flex';
+    };
+    document.getElementById('close-intervene').onclick = () => {
+      document.getElementById('intervention-modal').style.display = 'none';
+    };
+    document.getElementById('submit-intervene').onclick = async () => {
+      const inputEl = document.getElementById('intervene-input');
+      const val = inputEl.value.trim();
+      if (!val) return;
+
+      const submitBtn = document.getElementById('submit-intervene');
+      submitBtn.innerText = "Simulating...";
+      submitBtn.disabled = true;
+
+      try {
+        const res = await fetch('/api/turn', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            worldState: {
+              yearLabel: document.getElementById('year-label').innerText,
+              eraName: document.getElementById('era-label').innerText,
+              horsesInAmericas: simState.horsesInAmericas,
+              mammothsAlive: simState.mammothsAlive,
+              saharaGreen: simState.saharaGreen,
+              tribes: simState.tribes
+            },
+            playerInput: val
+          })
+        });
+
+        const data = await res.json();
+
+        // Execute engine mutations returned by Gemini AI!
+        if (data.commands && Array.isArray(data.commands)) {
+          data.commands.forEach(cmd => {
+            if (cmd.type === "unlock_horses_americas") simState.horsesInAmericas = true;
+            if (cmd.type === "save_mammoths") simState.mammothsAlive = true;
+            if (cmd.type === "green_sahara") { simState.saharaGreen = true; invalidateHighLODTiles(); }
+            if (cmd.type === "spawn_tribe" && cmd.lat != null && cmd.lon != null) {
+              const t = { name: cmd.name || "New Colony", lat: cmd.lat, lon: cmd.lon, fireLit: true, huts: 3 };
+              simState.tribes.push(t);
+              spawnTribeOnMap(t);
+            }
+          });
+          populateHistoricalWildlife();
+          rebuildMapPins();
+        }
+
+        showToast(`✨ <strong>Chronicle:</strong> ${data.narrative}`, 6500);
+      } catch (err) {
+        showToast("⚠️ Could not reach `/api/turn`. Make sure `api/turn.js` is pushed to GitHub.");
+      } finally {
+        submitBtn.innerText = "Enact Shift";
+        submitBtn.disabled = false;
+        inputEl.value = '';
+        document.getElementById('intervention-modal').style.display = 'none';
+      }
+    };
+
+    // =========================================================
+    // 10. CAMERA, BOUNDARY CLAMPING & LOGARITHMIC DIVE
     // =========================================================
     function getMinZoom() {
       return Math.max(window.innerWidth / MAP_WIDTH, window.innerHeight / MAP_HEIGHT);
     }
 
     function clampCamera() {
-      const sw = window.innerWidth;
-      const sh = window.innerHeight;
-      const curScale = world.scale.x;
-      const mw = MAP_WIDTH * curScale;
-      const mh = MAP_HEIGHT * curScale;
-
+      const sw = window.innerWidth, sh = window.innerHeight;
+      const s = world.scale.x, mw = MAP_WIDTH * s, mh = MAP_HEIGHT * s;
       if (mw > sw) world.x = Math.min(0, Math.max(sw - mw, world.x));
       else world.x = (sw - mw) / 2;
-
       if (mh > sh) world.y = Math.min(0, Math.max(sh - mh, world.y));
       else world.y = (sh - mh) / 2;
     }
@@ -1096,69 +1507,47 @@
     world.scale.set(getMinZoom());
     clampCamera();
 
-    let fly = {
-      active: false, startTime: 0, duration: 2400,
-      startZoom: 1, endZoom: 1,
-      startFocusX: 0, startFocusY: 0, endFocusX: 0, endFocusY: 0
-    };
-
-    function flyTo(worldX, worldY, targetZoom, duration = 2400) {
-      const curZoom = world.scale.x;
+    let fly = { active: false, startTime: 0, duration: 2200, startZoom: 1, endZoom: 1, sx: 0, sy: 0, ex: 0, ey: 0 };
+    function flyTo(wx, wy, targetZoom, duration = 2200) {
+      const cz = world.scale.x;
       fly = {
-        active: true,
-        startTime: performance.now(),
-        duration,
-        startZoom: curZoom,
-        endZoom: targetZoom,
-        startFocusX: (window.innerWidth / 2 - world.x) / curZoom,
-        startFocusY: (window.innerHeight / 2 - world.y) / curZoom,
-        endFocusX: worldX,
-        endFocusY: worldY
+        active: true, startTime: performance.now(), duration,
+        startZoom: cz, endZoom: targetZoom,
+        sx: (window.innerWidth / 2 - world.x) / cz,
+        sy: (window.innerHeight / 2 - world.y) / cz,
+        ex: wx, ey: wy
       };
     }
 
-    let isDragging = false;
-    let dragStart = { x: 0, y: 0 };
-    let worldStart = { x: 0, y: 0 };
-
+    let isDragging = false, dragStart = { x: 0, y: 0 }, worldStart = { x: 0, y: 0 };
     canvasEl.addEventListener('pointerdown', e => {
       if (!gameStarted) return;
-      document.getElementById('inspector-card').style.display = 'none';
-      isDragging = true;
-      fly.active = false;
+      isDragging = true; fly.active = false;
       canvasEl.setPointerCapture(e.pointerId);
       dragStart = { x: e.clientX, y: e.clientY };
       worldStart = { x: world.x, y: world.y };
     });
-
     canvasEl.addEventListener('pointermove', e => {
       if (!isDragging || !gameStarted) return;
       world.x = worldStart.x + (e.clientX - dragStart.x);
       world.y = worldStart.y + (e.clientY - dragStart.y);
       clampCamera();
     });
-
-    function stopDrag(e) {
+    function endDrag(e) {
       if (!isDragging) return;
       isDragging = false;
       try { canvasEl.releasePointerCapture(e.pointerId); } catch(err) {}
     }
-    canvasEl.addEventListener('pointerup', stopDrag);
-    canvasEl.addEventListener('pointercancel', stopDrag);
+    canvasEl.addEventListener('pointerup', endDrag);
+    canvasEl.addEventListener('pointercancel', endDrag);
 
     canvasEl.addEventListener('wheel', e => {
       if (!gameStarted) return;
-      e.preventDefault();
-      fly.active = false;
-
-      const factor = e.deltaY < 0 ? 1.22 : 0.82;
-      const minZ = getMinZoom();
-      const newScale = Math.min(Math.max(world.scale.x * factor, minZ), MAX_ZOOM);
-
+      e.preventDefault(); fly.active = false;
+      const factor = e.deltaY < 0 ? 1.24 : 0.81;
+      const newScale = Math.min(Math.max(world.scale.x * factor, getMinZoom()), MAX_ZOOM);
       const mx = e.clientX, my = e.clientY;
-      const wx = (mx - world.x) / world.scale.x;
-      const wy = (my - world.y) / world.scale.y;
-
+      const wx = (mx - world.x) / world.scale.x, wy = (my - world.y) / world.scale.y;
       world.scale.set(newScale);
       world.x = mx - wx * newScale;
       world.y = my - wy * newScale;
@@ -1166,221 +1555,254 @@
     }, { passive: false });
 
     window.addEventListener('resize', () => {
-      const minZ = getMinZoom();
-      if (world.scale.x < minZ) world.scale.set(minZ);
+      const mz = getMinZoom();
+      if (world.scale.x < mz) world.scale.set(mz);
       clampCamera();
     });
 
-    // =========================================================
-    // 8. UI & TIMELINE LOGIC
-    // =========================================================
     document.getElementById('start-btn').addEventListener('click', () => {
+      if (!texturesReady) return;
       gameStarted = true;
-      const modal = document.getElementById('intro-modal');
-      modal.style.opacity = '0';
-      setTimeout(() => modal.style.display = 'none', 600);
-      flyTo(CAMP_POS.x, CAMP_POS.y, 260.0, 2600);
+      const m = document.getElementById('intro-modal');
+      m.style.opacity = '0';
+      setTimeout(() => m.style.display = 'none', 600);
+      const startPos = latLonToWorld(simState.tribes[0].lat, simState.tribes[0].lon);
+      flyTo(startPos.x, startPos.y, 260.0, 2600);
     });
 
-    document.getElementById('btn-orbit').addEventListener('click', () => {
-      flyTo(MAP_WIDTH / 2, MAP_HEIGHT / 2, getMinZoom(), 1600);
-    });
+    document.getElementById('btn-orbit').onclick = () => flyTo(MAP_WIDTH / 2, MAP_HEIGHT / 2, getMinZoom(), 1600);
+    document.getElementById('btn-camp').onclick = () => {
+      const c = latLonToWorld(simState.tribes[0].lat, simState.tribes[0].lon);
+      flyTo(c.x, c.y, 260.0, 1800);
+    };
 
-    document.getElementById('btn-camp').addEventListener('click', () => {
-      flyTo(CAMP_POS.x, CAMP_POS.y, 260.0, 1800);
-    });
-
-    let currentYear = 300000;
+    // Time Speed Controls
     let timeSpeed = 1;
-    let milestones = { 1: false, 2: false, 3: false };
-
-    function setSpeed(sp) {
-      timeSpeed = sp;
-      document.getElementById('sp-0').classList.toggle('active', sp === 0);
-      document.getElementById('sp-1').classList.toggle('active', sp === 1);
-      document.getElementById('sp-5').classList.toggle('active', sp === 5);
+    function setSpeed(s) {
+      timeSpeed = s;
+      [0, 1, 5, 20].forEach(k => document.getElementById(`sp-${k}`).classList.toggle('active', k === s));
     }
-    document.getElementById('sp-0').onclick = () => setSpeed(0);
-    document.getElementById('sp-1').onclick = () => setSpeed(1);
-    document.getElementById('sp-5').onclick = () => setSpeed(5);
-
-    function checkUnlock() {
-      const done = milestones[1] && milestones[2] && milestones[3];
-      const btn = document.getElementById('leap-btn');
-      btn.classList.toggle('unlocked', done);
-      btn.innerText = done ? "⚡ CHRONOS LEAP READY!" : "⚡ CHRONOS LEAP";
-    }
-
-    ['m1', 'm2', 'm3'].forEach((id, idx) => {
-      document.getElementById(id).addEventListener('click', function() {
-        const key = idx + 1;
-        milestones[key] = !milestones[key];
-        this.classList.toggle('completed', milestones[key]);
-        checkUnlock();
-      });
-    });
-
-    document.getElementById('leap-btn').addEventListener('click', function() {
-      if (!(milestones[1] && milestones[2] && milestones[3])) {
-        alert("Complete all 3 Era Goals on the bottom left first!");
-        return;
-      }
-      currentYear = 70000;
-      document.getElementById('year-label').innerText = "70,000 BCE";
-      document.getElementById('era-label').innerText = "THE COASTAL MIGRATION";
-      document.getElementById('pop-label').innerText = "48,000";
-
-      const arabiaPos = { x: CAMP_POS.x + 70, y: CAMP_POS.y - 180 };
-      buildCamp(arabiaPos);
-      flyTo(arabiaPos.x, arabiaPos.y, 260.0, 2200);
-
-      milestones = { 1: false, 2: false, 3: false };
-      document.getElementById('m1').className = 'milestone-btn';
-      document.getElementById('m1').innerText = '🏹 Composite Bows';
-      document.getElementById('m2').className = 'milestone-btn';
-      document.getElementById('m2').innerText = '🛶 Coastal Rafts';
-      document.getElementById('m3').className = 'milestone-btn';
-      document.getElementById('m3').innerText = '🎨 Cave Painting';
-      checkUnlock();
-    });
-
-    document.getElementById('btn-intervene').onclick = () => {
-      document.getElementById('intervention-modal').style.display = 'flex';
-    };
-    document.getElementById('close-intervene').onclick = () => {
-      document.getElementById('intervention-modal').style.display = 'none';
-    };
-    document.getElementById('submit-intervene').onclick = () => {
-      const val = document.getElementById('intervene-input').value.trim();
-      if (!val) return;
-      alert(`Intervention Logged: "${val}"\n(Next step: Connect this to the Gemini API route!)`);
-      document.getElementById('intervene-input').value = '';
-      document.getElementById('intervention-modal').style.display = 'none';
-    };
+    [0, 1, 5, 20].forEach(k => document.getElementById(`sp-${k}`).onclick = () => setSpeed(k));
 
     // =========================================================
-    // 9. MAIN RENDER & SIMULATION LOOP
+    // 11. MAIN SIMULATION LOOP (5-MIN DAY/NIGHT + QUADTREE)
     // =========================================================
+    let lastTime = performance.now();
     let ticker = 0;
-    app.ticker.add(() => {
-      ticker += 0.05;
 
-      // Time Passage
-      if (gameStarted && timeSpeed > 0 && currentYear > 1000) {
-        if (Math.floor(ticker * 10) % 4 === 0) {
-          currentYear = Math.max(1000, currentYear - timeSpeed);
-          document.getElementById('year-label').innerText = currentYear.toLocaleString() + ' BCE';
+    app.ticker.add(() => {
+      const now = performance.now();
+      const dt = Math.min(0.1, (now - lastTime) / 1000);
+      lastTime = now;
+      frameCounter++;
+      ticker += dt * 4;
+
+      // 5-Minute Real-Time Day/Night Loop (300 seconds = 1.0 full day at 1x)
+      if (gameStarted && timeSpeed > 0) {
+        simState.dayTime = (simState.dayTime + (dt * timeSpeed) / 300.0) % 1.0;
+
+        // Insanely slow historical drift (roughly ~1 year every 5 real seconds at 1x)
+        if (Math.floor(frameCounter) % 300 === 0 && !simState.isCE && simState.year > 1000) {
+          simState.year -= timeSpeed;
+          document.getElementById('year-label').innerText = simState.year.toLocaleString() + ' BCE';
         }
       }
 
-      // Exponential Camera Dive
+      // Format 24-Hour Clock & Atmospheric Lighting
+      const hours24 = Math.floor(simState.dayTime * 24);
+      const mins = Math.floor((simState.dayTime * 24 - hours24) * 60);
+      const ampm = hours24 >= 12 ? 'PM' : 'AM';
+      const h12 = (hours24 % 12) || 12;
+      const minStr = mins < 10 ? '0' + mins : mins;
+
+      let period = "Night", icon = "🌙";
+      let overlayColor = 0x04081c, overlayAlpha = 0.68;
+
+      if (simState.dayTime >= 0.22 && simState.dayTime < 0.32) {
+        period = "Dawn"; icon = "🌅";
+        const t = (simState.dayTime - 0.22) / 0.10;
+        overlayColor = 0x7c2d12; overlayAlpha = 0.35 * (1 - t);
+      } else if (simState.dayTime >= 0.32 && simState.dayTime < 0.70) {
+        period = "Daylight"; icon = "☀️";
+        overlayAlpha = 0.0;
+      } else if (simState.dayTime >= 0.70 && simState.dayTime < 0.80) {
+        period = "Dusk"; icon = "🌇";
+        const t = (simState.dayTime - 0.70) / 0.10;
+        overlayColor = 0x9a3412; overlayAlpha = 0.42 * t;
+      } else {
+        period = "Night"; icon = "🌙";
+        overlayColor = 0x040921; overlayAlpha = 0.68;
+      }
+
+      const isNight = simState.dayTime < 0.25 || simState.dayTime > 0.75;
+      document.getElementById('clock-icon').innerText = icon;
+      document.getElementById('clock-text').innerText = `${h12}:${minStr} ${ampm} • ${period}`;
+
+      dayNightOverlay.clear();
+      if (overlayAlpha > 0.01) {
+        dayNightOverlay.beginFill(overlayColor, overlayAlpha);
+        dayNightOverlay.drawRect(0, 0, window.innerWidth, window.innerHeight);
+        dayNightOverlay.endFill();
+      }
+
+      // Exponential Camera Flight
       if (fly.active) {
-        const now = performance.now();
         let t = Math.min(1, (now - fly.startTime) / fly.duration);
         const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-
-        const logZ = Math.log(fly.startZoom) + (Math.log(fly.endZoom) - Math.log(fly.startZoom)) * ease;
-        const curZ = Math.exp(logZ);
-
-        const fx = fly.startFocusX + (fly.endFocusX - fly.startFocusX) * ease;
-        const fy = fly.startFocusY + (fly.endFocusY - fly.startFocusY) * ease;
-
+        const curZ = Math.exp(Math.log(fly.startZoom) + (Math.log(fly.endZoom) - Math.log(fly.startZoom)) * ease);
+        const fx = fly.sx + (fly.ex - fly.sx) * ease;
+        const fy = fly.sy + (fly.ey - fly.sy) * ease;
         world.scale.set(curZ);
         world.x = window.innerWidth / 2 - fx * curZ;
         world.y = window.innerHeight / 2 - fy * curZ;
         clampCamera();
-
         if (t >= 1) fly.active = false;
       }
 
       const zoom = world.scale.x;
+      const curLOD = updateQuadtree(zoom);
       document.getElementById('zoom-text').innerText = zoom.toFixed(1) + 'x';
+      document.getElementById('lod-text').innerText = `LOD ${curLOD}`;
 
-      // Sync Shader Uniforms to Current Camera
-      earthShader.uniforms.uScreenSize = [app.screen.width, app.screen.height];
-      earthShader.uniforms.uWorldOffset = [world.x, world.y];
-      earthShader.uniforms.uZoom = zoom;
-      earthShader.uniforms.uTime = ticker;
+      // Ecosystem & Entity Fade-Ins
+      updateDenseEcosystem(zoom);
+      const entityAlpha = Math.max(0, Math.min(1, (zoom - 90) / 100));
+      campLayer.alpha = entityAlpha;
+      entitiesLayer.alpha = entityAlpha;
+      nightWorldGlowLayer.alpha = entityAlpha * (isNight ? 0.95 : 0.25);
+      campLayer.visible = entityAlpha > 0.01;
+      entitiesLayer.visible = entityAlpha > 0.01;
 
-      let alt = "Orbit";
-      if (zoom > 200) alt = "Camp Ground (Micro)";
-      else if (zoom > 80) alt = "Local Savanna";
-      else if (zoom > 25) alt = "Regional Valley";
-      else if (zoom > 4) alt = "Continental";
-      document.getElementById('altitude-label').innerText = `Altitude: ${alt}`;
-
-      // Smoothly Fade Procedural Foliage & Camp
-      updateProceduralFoliage(zoom);
-
-      const campAlpha = Math.max(0, Math.min(1, (zoom - 110) / 110));
-      campLayer.alpha = campAlpha;
-      campLayer.visible = campAlpha > 0.01;
-
-      // Orbit Beacon
-      beacon.clear();
-      const beaconAlpha = 1 - Math.max(0, Math.min(1, (zoom - 12) / 24));
-      if (beaconAlpha > 0.02) {
-        const pulse = Math.sin(ticker * 2) * 2.5;
-        const r = Math.max(2.5, (14 + pulse) / Math.sqrt(zoom));
-        beacon.beginFill(0xfbbf24, 0.35 * beaconAlpha);
-        beacon.drawCircle(CAMP_POS.x, CAMP_POS.y, r);
-        beacon.beginFill(0x38bdf8, beaconAlpha);
-        beacon.drawCircle(CAMP_POS.x, CAMP_POS.y, r * 0.4);
-        beacon.endFill();
+      // Scale Pins inversely so they stay neat & readable at any zoom
+      const pinFade = 1 - Math.max(0, Math.min(1, (zoom - 100) / 80));
+      pinLayer.visible = pinFade > 0.02;
+      pinLayer.alpha = pinFade;
+      if (pinLayer.visible) {
+        const invScale = 1 / zoom;
+        activePins.forEach(p => p.scale.set(invScale));
       }
 
-      // Animate Campfire, Smoke, and Walking People
+      // Animate Campfires, Humans & Wildlife
       if (campLayer.visible) {
-        fireGraphic.clear();
-        fireGraphic.beginFill(0x475569);
-        fireGraphic.drawCircle(CAMP_POS.x, CAMP_POS.y, 0.055);
-        fireGraphic.beginFill(0xf97316);
-        const fSize = 0.032 + Math.sin(ticker * 6) * 0.008;
-        fireGraphic.drawRect(CAMP_POS.x - fSize/2, CAMP_POS.y - fSize, fSize, fSize * 1.4);
-        fireGraphic.beginFill(0xfef08a);
-        fireGraphic.drawRect(CAMP_POS.x - 0.01, CAMP_POS.y - 0.02, 0.02, 0.02);
-        fireGraphic.endFill();
+        campVisuals.forEach(cv => {
+          cv.hearth.clear();
+          cv.hearth.beginFill(0x475569);
+          cv.hearth.drawCircle(cv.center.x, cv.center.y, 0.055);
+          if (cv.tribe.fireLit) {
+            cv.hearth.beginFill(0xf97316);
+            const fSize = 0.032 + Math.sin(ticker * 4) * 0.008;
+            cv.hearth.drawRect(cv.center.x - fSize/2, cv.center.y - fSize, fSize, fSize * 1.4);
+            cv.hearth.beginFill(0xfef08a);
+            cv.hearth.drawRect(cv.center.x - 0.01, cv.center.y - 0.02, 0.02, 0.02);
 
-        smokeParticles.forEach(p => {
-          p.life -= 0.01;
-          p.y -= 0.004;
-          p.x += Math.sin(ticker + p.life * 5) * 0.0008;
-          p.alpha = p.life * 0.65;
-          if (p.life <= 0) {
-            p.x = CAMP_POS.x + (Math.random() - 0.5) * 0.025;
-            p.y = CAMP_POS.y - 0.025;
-            p.life = 1.0;
+            // Flicker firelight glow
+            cv.fireGlow.scale.set(0.024 + Math.sin(ticker * 5) * 0.002);
+
+            cv.smoke.forEach(p => {
+              p.life -= 0.008;
+              p.y -= 0.003;
+              p.x += Math.sin(ticker + p.life * 5) * 0.0006;
+              p.alpha = p.life * 0.6;
+              if (p.life <= 0) {
+                p.x = cv.center.x + (Math.random() - 0.5) * 0.02;
+                p.y = cv.center.y - 0.02;
+                p.life = 1.0;
+              }
+            });
+          } else {
+            // Unlit log pile
+            cv.hearth.beginFill(0x78350f);
+            cv.hearth.drawRect(cv.center.x - 0.025, cv.center.y - 0.01, 0.05, 0.02);
           }
+          cv.hearth.endFill();
         });
 
-        const spd = timeSpeed === 0 ? 0 : (timeSpeed === 5 ? 0.008 : 0.003);
-        campEntities.forEach(ent => {
+        // Human Behaviors (Daytime vs Nighttime Huddle!)
+        const spd = timeSpeed === 0 ? 0 : Math.min(0.015, 0.0025 * Math.sqrt(timeSpeed));
+        humanAgents.forEach(h => {
           if (spd === 0) return;
-          if (ent.waitTimer > 0) { ent.waitTimer--; return; }
 
-          const dx = ent.targetX - ent.container.x;
-          const dy = ent.targetY - ent.container.y;
+          // Active hunt logic
+          if (h.huntingTarget) {
+            if (!h.huntingTarget.alive) {
+              h.huntingTarget = null;
+            } else {
+              const dx = h.huntingTarget.sprite.x - h.sprite.x;
+              const dy = h.huntingTarget.sprite.y - h.sprite.y;
+              const dist = Math.hypot(dx, dy);
+              if (dist < 0.06) {
+                // Caught gazelle!
+                h.huntingTarget.alive = false;
+                h.huntingTarget.sprite.visible = false;
+                h.huntingTarget = null;
+                completeSingleHunt();
+              } else {
+                h.sprite.x += (dx / dist) * (spd * 1.8);
+                h.sprite.y += (dy / dist) * (spd * 1.8);
+                h.sprite.scale.x = dx < 0 ? -0.0040 : 0.0040;
+                h.anim += 0.35;
+                h.sprite.texture = Math.floor(h.anim) % 2 === 0 ? texHunter1 : texHunter2;
+                return;
+              }
+            }
+          }
+
+          if (h.wait > 0) { h.wait--; return; }
+
+          const dx = h.targetX - h.sprite.x;
+          const dy = h.targetY - h.sprite.y;
           const dist = Math.hypot(dx, dy);
 
-          if (dist < 0.03) {
-            ent.waitTimer = 60 + Math.random() * 160;
+          if (dist < 0.025) {
+            h.wait = isNight ? (120 + Math.random() * 180) : (40 + Math.random() * 100);
             const ang = Math.random() * Math.PI * 2;
-            const rad = ent.role === "Firekeeper" ? (0.1 + Math.random() * 0.2) : (0.12 + Math.random() * 1.15);
-            ent.targetX = ent.home.x + Math.cos(ang) * rad;
-            ent.targetY = ent.home.y + Math.sin(ang) * rad;
+            // At night, humans gather tightly around the warm firelight!
+            const maxRad = isNight ? (h.role === "Hunter" ? 0.35 : 0.18) : (h.role === "Firekeeper" ? 0.15 : 0.95);
+            const rad = 0.08 + Math.random() * maxRad;
+            h.targetX = h.home.x + Math.cos(ang) * rad;
+            h.targetY = h.home.y + Math.sin(ang) * rad;
           } else {
-            ent.container.x += (dx / dist) * spd;
-            ent.container.y += (dy / dist) * spd;
-
-            const baseScale = Math.abs(ent.sprite.scale.x);
-            ent.sprite.scale.x = dx < 0 ? -baseScale : baseScale;
-
-            if (ent.role === "Hunter") {
-              ent.animTimer += 0.25;
-              ent.sprite.texture = (Math.floor(ent.animTimer) % 2 === 0) ? texHunter1 : texHunter2;
+            h.sprite.x += (dx / dist) * spd;
+            h.sprite.y += (dy / dist) * spd;
+            h.sprite.scale.x = dx < 0 ? -0.0040 : 0.0040;
+            if (h.role === "Hunter") {
+              h.anim += 0.22;
+              h.sprite.texture = Math.floor(h.anim) % 2 === 0 ? texHunter1 : texHunter2;
             }
           }
         });
+
+        // Gazelles & Historical Wildlife Wandering
+        const aniSpd = spd * 0.7;
+        if (aniSpd > 0) {
+          gazelles.forEach(g => {
+            if (!g.alive) return;
+            if (g.wait > 0) { g.wait--; return; }
+            const dx = g.tx - g.sprite.x, dy = g.ty - g.sprite.y, d = Math.hypot(dx, dy);
+            if (d < 0.04) {
+              g.wait = 80 + Math.random() * 160;
+              g.tx = g.home.x + (Math.random() - 0.5) * 0.8;
+              g.ty = g.home.y + (Math.random() - 0.5) * 0.8;
+            } else {
+              g.sprite.x += (dx / d) * aniSpd; g.sprite.y += (dy / d) * aniSpd;
+              g.sprite.scale.x = dx < 0 ? -0.0038 : 0.0038;
+            }
+          });
+
+          wildAnimals.forEach(w => {
+            if (w.wait > 0) { w.wait--; return; }
+            const dx = w.tx - w.sprite.x, dy = w.ty - w.sprite.y, d = Math.hypot(dx, dy);
+            if (d < 0.05) {
+              w.wait = 90 + Math.random() * 180;
+              w.tx = w.home.x + (Math.random() - 0.5) * 1.8;
+              w.ty = w.home.y + (Math.random() - 0.5) * 1.8;
+            } else {
+              w.sprite.x += (dx / d) * aniSpd; w.sprite.y += (dy / d) * aniSpd;
+              const bs = Math.abs(w.sprite.scale.x);
+              w.sprite.scale.x = dx < 0 ? -bs : bs;
+            }
+          });
+        }
       }
     });
   </script>
