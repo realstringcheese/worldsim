@@ -72,10 +72,9 @@
     }
     .btn-mini:hover { border-color: var(--accent); color: #fff; }
 
-    /* Character Inspector Toast */
     #inspector-card {
       position: fixed;
-      top: 90px;
+      top: 96px;
       left: 16px;
       background: var(--panel);
       border: 1px solid var(--accent);
@@ -163,7 +162,7 @@
     #intro-modal {
       position: fixed;
       inset: 0;
-      background: rgba(2, 6, 23, 0.85);
+      background: rgba(2, 6, 23, 0.84);
       backdrop-filter: blur(8px);
       display: flex;
       flex-direction: column;
@@ -180,7 +179,7 @@
       margin-bottom: 10px;
       text-shadow: 0 0 30px rgba(56, 189, 248, 0.5);
     }
-    #intro-modal p { color: #94a3b8; max-width: 480px; line-height: 1.6; margin-bottom: 26px; font-size: 1rem; }
+    #intro-modal p { color: #94a3b8; max-width: 500px; line-height: 1.6; margin-bottom: 26px; font-size: 1rem; }
     .btn-start {
       background: var(--accent);
       color: #020617;
@@ -236,8 +235,8 @@
   <!-- Intro Modal -->
   <div id="intro-modal">
     <h1>CHRONOS</h1>
-    <p>An 8-bit living simulation of Earth. Zoom smoothly from orbital satellite down through the canopy to watch early humans survive in 300,000 BCE.</p>
-    <button class="btn-start" id="start-btn">ENTER 300,000 BCE</button>
+    <p>An infinite-detail 8-bit simulation of Earth. Dive from 4K orbital topography down through fractal coastlines and forests to watch early humans survive in 300,000 BCE.</p>
+    <button class="btn-start" id="start-btn">Loading 4K Earth...</button>
   </div>
 
   <!-- Top HUD -->
@@ -279,7 +278,7 @@
     </div>
   </div>
 
-  <!-- Custom Intervention Modal -->
+  <!-- Intervention Modal -->
   <div id="intervention-modal">
     <div class="intervention-box">
       <h3 style="color: var(--accent);">Intervene in History</h3>
@@ -294,12 +293,12 @@
 
   <script>
     // =========================================================
-    // 1. INITIALIZE PIXI ENGINE & CONSTANTS
+    // 1. INITIALIZE PIXI ENGINE & CONSTANTS (4096 x 2048 WORLD)
     // =========================================================
     let gameStarted = false;
-    const MAP_WIDTH = 2048;
-    const MAP_HEIGHT = 1024;
-    const MAX_ZOOM = 750.0;
+    const MAP_WIDTH = 4096;
+    const MAP_HEIGHT = 2048;
+    const MAX_ZOOM = 600.0;
 
     // East African Rift Valley (Serengeti / Olduvai area: ~35.8°E, ~2.8°S)
     let CAMP_POS = {
@@ -317,32 +316,290 @@
     const canvasEl = app.view;
     document.getElementById('canvas-container').appendChild(canvasEl);
 
+    // =========================================================
+    // 2. GPU FRACTAL MULTI-SCALE TERRAIN SHADER
+    // =========================================================
+    const vertexSrc = `
+      attribute vec2 aVertexPosition;
+      uniform mat3 translationMatrix;
+      uniform mat3 projectionMatrix;
+      uniform vec2 uScreenSize;
+      varying vec2 vScreenPos;
+
+      void main() {
+        vScreenPos = aVertexPosition * uScreenSize;
+        gl_Position = vec4((projectionMatrix * translationMatrix * vec3(vScreenPos, 1.0)).xy, 0.0, 1.0);
+      }
+    `;
+
+    const fragmentSrc = `
+      precision highp float;
+
+      varying vec2 vScreenPos;
+      uniform vec2 uWorldOffset;
+      uniform float uZoom;
+      uniform vec2 uMapSize;
+      uniform float uTime;
+      uniform vec2 uCampPos;
+      uniform sampler2D uDayMap;
+      uniform sampler2D uWaterMap;
+
+      // Float32-safe spatial hash (prevents banding at 600x zoom)
+      float hash(vec2 p) {
+        vec2 wp = mod(p, 289.0);
+        return fract(sin(dot(wp, vec2(127.1, 311.7))) * 43758.5453123);
+      }
+
+      float noise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        return mix(
+          mix(hash(i + vec2(0.0, 0.0)), hash(i + vec2(1.0, 0.0)), u.x),
+          mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x),
+          u.y
+        );
+      }
+
+      float fbm(vec2 p) {
+        float v = 0.0;
+        float a = 0.5;
+        for (int i = 0; i < 4; i++) {
+          v += a * noise(p);
+          p *= 2.03;
+          a *= 0.5;
+        }
+        return v;
+      }
+
+      // Crisp pixel-grid noise for cascading 8-bit ground texture
+      float pixelNoise(vec2 worldPos, float cellSize) {
+        return hash(floor(worldPos / cellSize));
+      }
+
+      void main() {
+        vec2 worldPos = (vScreenPos - uWorldOffset) / uZoom;
+        vec2 uv = worldPos / uMapSize;
+
+        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+          gl_FragColor = vec4(0.008, 0.024, 0.09, 1.0);
+          return;
+        }
+
+        // 1. Fractal Coastline Perturbation (increases shoreline quality on zoom)
+        float coastFade = smoothstep(5.0, 60.0, uZoom);
+        float coastNoise = (fbm(worldPos * 0.45) - 0.5) * 0.65 * coastFade
+                         + (fbm(worldPos * 3.2) - 0.5) * 0.18 * smoothstep(30.0, 200.0, uZoom);
+
+        // Organic UV warp for biome transitions when zoomed close
+        vec2 warp = vec2(
+          fbm(worldPos * 0.6 + vec2(4.1, 1.7)) - 0.5,
+          fbm(worldPos * 0.6 + vec2(9.2, 5.3)) - 0.5
+        ) * 0.0012 * coastFade;
+
+        vec2 sampleUV = clamp(uv + warp, 0.0, 1.0);
+
+        float waterVal = texture2D(uWaterMap, uv).r + coastNoise;
+        vec3 dayCol = texture2D(uDayMap, sampleUV).rgb;
+
+        // 2. Determine Water vs Land cleanly from Specular Water Mask
+        bool isWater = waterVal > 0.46;
+
+        vec3 finalCol;
+
+        if (isWater) {
+          // Ocean Depth & Coastal Shelves
+          float depth = clamp((waterVal - 0.46) * 2.5, 0.0, 1.0);
+          vec3 deepNavy = vec3(0.04, 0.12, 0.34);
+          vec3 midBlue  = vec3(0.08, 0.28, 0.62);
+          vec3 shallow  = vec3(0.06, 0.56, 0.78);
+
+          finalCol = mix(shallow, midBlue, smoothstep(0.0, 0.45, depth));
+          finalCol = mix(finalCol, deepNavy, smoothstep(0.45, 1.0, depth));
+
+          // Animated pixel wave shimmer at high zoom
+          float waveScale = mix(0.2, 0.015, smoothstep(10.0, 250.0, uZoom));
+          float wNoise = pixelNoise(worldPos + vec2(uTime * 0.012, 0.0), waveScale);
+          if (wNoise > 0.88) {
+            finalCol += vec3(0.08, 0.14, 0.18) * smoothstep(4.0, 80.0, uZoom);
+          }
+
+          // White seafoam lapping along coastlines
+          if (waterVal < 0.495) {
+            float foamWave = sin(worldPos.x * 12.0 + worldPos.y * 8.0 + uTime * 2.0);
+            if (foamWave > 0.25 && coastFade > 0.1) {
+              finalCol = mix(finalCol, vec3(0.88, 0.96, 1.0), 0.75 * coastFade);
+            }
+          }
+        } else {
+          // LAND BIOMES (Guaranteed zero blue rainforests!)
+          // Boost vibrancy for 8-bit aesthetic while keeping natural hue
+          float lum = dot(dayCol, vec3(0.299, 0.587, 0.114));
+          vec3 boosted = mix(vec3(lum), dayCol, 1.38);
+
+          // Beach border right along the water edge
+          float shoreDist = 0.46 - waterVal;
+          if (shoreDist < 0.055 && coastFade > 0.05) {
+            vec3 beachSand = vec3(0.86, 0.76, 0.52);
+            boosted = mix(beachSand, boosted, smoothstep(0.01, 0.055, shoreDist));
+          }
+
+          // 3. CASCADING MULTI-OCTAVE GROUND DETAIL (Keeps getting sharper as you zoom!)
+          // Octave 1: Macro hills / biome patches (zoom 6x -> 60x)
+          float oct1 = smoothstep(5.0, 35.0, uZoom);
+          float macroPat = (fbm(worldPos * 0.9) - 0.5) * 0.18 * oct1;
+
+          // Octave 2: Valley dirt / meadow patches (zoom 25x -> 140x)
+          float oct2 = smoothstep(22.0, 110.0, uZoom);
+          float medPat = (pixelNoise(worldPos, 0.06) - 0.5) * 0.14 * oct2;
+
+          // Octave 3: Ground turf / soil clods (zoom 80x -> 300x)
+          float oct3 = smoothstep(75.0, 220.0, uZoom);
+          float turfPat = (pixelNoise(worldPos, 0.015) - 0.5) * 0.15 * oct3;
+
+          // Octave 4: Individual pixel grass blades, pebbles, wildflowers (zoom 180x -> 600x)
+          float oct4 = smoothstep(160.0, 360.0, uZoom);
+          float micro = pixelNoise(worldPos, 0.0035);
+          vec3 microTint = vec3(0.0);
+          if (micro > 0.84) {
+            // Bright grass tip or pebble
+            microTint = (boosted.g > boosted.r * 0.9) ? vec3(0.10, 0.18, 0.04) : vec3(0.12, 0.10, 0.06);
+          } else if (micro < 0.14) {
+            // Deep soil shadow pixel
+            microTint = vec3(-0.10, -0.10, -0.08);
+          } else if (micro > 0.495 && micro < 0.502 && boosted.g > 0.35) {
+            // Occasional tiny wildflower speck
+            microTint = vec3(0.28, 0.24, -0.05);
+          }
+
+          finalCol = clamp(boosted + macroPat + medPat + turfPat + microTint * oct4, 0.0, 1.0);
+
+          // Packed warm earth clearing around the Rift Valley Camp
+          float campDist = distance(worldPos, uCampPos);
+          if (campDist < 1.6) {
+            float clearingFade = (1.0 - smoothstep(0.6, 1.5, campDist)) * smoothstep(60.0, 180.0, uZoom);
+            vec3 packedEarth = vec3(0.48, 0.35, 0.21) + (pixelNoise(worldPos, 0.004) - 0.5) * 0.12;
+            finalCol = mix(finalCol, packedEarth, clearingFade * 0.72);
+          }
+        }
+
+        // Subtle 8-bit palette crunch when zoomed far out
+        float orbitQuant = 1.0 - smoothstep(1.0, 12.0, uZoom);
+        if (orbitQuant > 0.05) {
+          vec3 qCol = floor(finalCol * 18.0 + 0.5) / 18.0;
+          finalCol = mix(finalCol, qCol, orbitQuant * 0.65);
+        }
+
+        gl_FragColor = vec4(finalCol, 1.0);
+      }
+    `;
+
+    const quadGeo = new PIXI.Geometry()
+      .addAttribute('aVertexPosition', [0, 0, 1, 0, 1, 1, 0, 1], 2)
+      .addIndex([0, 1, 2, 0, 2, 3]);
+
+    // Placeholder 1x1 textures while 4K images download
+    const dummyWaterTex = PIXI.Texture.WHITE;
+    const dummyDayTex = PIXI.Texture.from(document.createElement('canvas'));
+
+    const earthUniforms = {
+      uScreenSize: [window.innerWidth, window.innerHeight],
+      uWorldOffset: [0, 0],
+      uZoom: 1.0,
+      uMapSize: [MAP_WIDTH, MAP_HEIGHT],
+      uTime: 0.0,
+      uCampPos: [CAMP_POS.x, CAMP_POS.y],
+      uDayMap: dummyDayTex,
+      uWaterMap: dummyWaterTex
+    };
+
+    const earthShader = PIXI.Shader.from(vertexSrc, fragmentSrc, earthUniforms);
+    const earthMesh = new PIXI.Mesh(quadGeo, earthShader);
+    app.stage.addChild(earthMesh);
+
+    // World container for sprites (trees, humans, huts, beacons)
     const world = new PIXI.Container();
     app.stage.addChild(world);
 
-    // Sub-layers ordered bottom-to-top
-    const mapSmoothLayer = new PIXI.Container();   // Blended terrain base at deep zoom
-    const mapPixelLayer = new PIXI.Container();    // Crisp 8-bit Earth map from space
-    const groundDetailLayer = new PIXI.Container();// Procedural grass/soil/water textures
-    const campGroundLayer = new PIXI.Container();  // Camp clearing dirt & footprints
-    const microPropsLayer = new PIXI.Container();  // Grass tufts, boulders, bushes
-    const campLayer = new PIXI.Container();        // Huts, fire, animals, humans
-    const treeLayer = new PIXI.Container();        // Biome-accurate forest canopies
-    const beaconLayer = new PIXI.Container();      // Orbital markers
-
-    world.addChild(
-      mapSmoothLayer,
-      mapPixelLayer,
-      groundDetailLayer,
-      campGroundLayer,
-      microPropsLayer,
-      campLayer,
-      treeLayer,
-      beaconLayer
-    );
+    const microPropsLayer = new PIXI.Container();
+    const campLayer = new PIXI.Container();
+    const treeLayer = new PIXI.Container();
+    const beaconLayer = new PIXI.Container();
+    world.addChild(microPropsLayer, campLayer, treeLayer, beaconLayer);
 
     // =========================================================
-    // 2. DETAILED PIXEL ART SPRITE GENERATORS (MATRICES)
+    // 3. LOAD 4K DAYMAP + OCEAN SPECULAR MASK & BUILD BIOME GRID
+    // =========================================================
+    // Biome IDs: 0=Water, 2=Desert, 3=Savanna, 4=Grassland, 5=Forest, 6=Mountain, 7=Snow
+    const DATA_W = 2048;
+    const DATA_H = 1024;
+    const biomeGrid = new Uint8Array(DATA_W * DATA_H);
+
+    const dayUrl = "https://cdn.jsdelivr.net/gh/mrdoob/three.js@master/examples/textures/planets/earth_day_4096.jpg";
+    const waterUrl = "https://cdn.jsdelivr.net/gh/mrdoob/three.js@master/examples/textures/planets/earth_specular_2048.jpg";
+
+    let loadedDayImg = null;
+    let loadedWaterImg = null;
+
+    function checkTexturesReady() {
+      if (!loadedDayImg || !loadedWaterImg) return;
+
+      // Upload high-res textures to GPU shader
+      const dayTex = PIXI.Texture.from(loadedDayImg);
+      dayTex.baseTexture.scaleMode = PIXI.SCALE_MODES.LINEAR;
+      earthShader.uniforms.uDayMap = dayTex;
+
+      const waterTex = PIXI.Texture.from(loadedWaterImg);
+      waterTex.baseTexture.scaleMode = PIXI.SCALE_MODES.LINEAR;
+      earthShader.uniforms.uWaterMap = waterTex;
+
+      // Build CPU Biome Grid for procedural tree & rock spawning
+      try {
+        const cDay = document.createElement('canvas');
+        cDay.width = DATA_W; cDay.height = DATA_H;
+        const ctxD = cDay.getContext('2d');
+        ctxD.drawImage(loadedDayImg, 0, 0, DATA_W, DATA_H);
+        const dayData = ctxD.getImageData(0, 0, DATA_W, DATA_H).data;
+
+        const cWat = document.createElement('canvas');
+        cWat.width = DATA_W; cWat.height = DATA_H;
+        const ctxW = cWat.getContext('2d');
+        ctxW.drawImage(loadedWaterImg, 0, 0, DATA_W, DATA_H);
+        const watData = ctxW.getImageData(0, 0, DATA_W, DATA_H).data;
+
+        for (let i = 0, px = 0; i < dayData.length; i += 4, px++) {
+          const isWater = watData[i] > 118;
+          if (isWater) {
+            biomeGrid[px] = 0;
+            continue;
+          }
+          const r = dayData[i], g = dayData[i+1], b = dayData[i+2];
+          if (r > 195 && g > 195 && b > 195) biomeGrid[px] = 7; // Snow
+          else if (r > 140 && g > 110 && b < 110 && r > g + 10) biomeGrid[px] = 2; // Desert
+          else if (r >= g - 10 && g > b + 15 && r > 90) biomeGrid[px] = 3; // Savanna
+          else if (g >= r && g > b) biomeGrid[px] = ((r + g + b) / 3 < 95) ? 5 : 4; // Forest vs Grass
+          else biomeGrid[px] = 6; // Mountain / Rock
+        }
+      } catch (e) {
+        console.warn("CPU biome classification skipped:", e);
+      }
+
+      const btn = document.getElementById('start-btn');
+      btn.innerText = "ENTER 300,000 BCE";
+    }
+
+    const imgD = new Image();
+    imgD.crossOrigin = "anonymous";
+    imgD.onload = () => { loadedDayImg = imgD; checkTexturesReady(); };
+    imgD.src = dayUrl;
+
+    const imgW = new Image();
+    imgW.crossOrigin = "anonymous";
+    imgW.onload = () => { loadedWaterImg = imgW; checkTexturesReady(); };
+    imgW.src = waterUrl;
+
+    // =========================================================
+    // 4. HIGH-DETAIL PIXEL ART SPRITES (WITH FACES, EYES, SHADING)
     // =========================================================
     function buildSpriteFromMatrix(rows, palette) {
       const h = rows.length;
@@ -365,29 +622,15 @@
       return tex;
     }
 
-    // 20x28 High-Detail Prehistoric Humans (Visible Eyes, Face, Hair, Fur Tunics, Spears)
     const humanPalette = {
-      'O': '#18100c', // Dark outline
-      'H': '#291d16', // Dark hair
-      'h': '#443227', // Hair highlight
-      'G': '#9ca3af', // Elder gray hair/beard
-      'S': '#c68642', // Skin base
-      's': '#e0ac69', // Skin highlight (forehead/cheeks)
-      'd': '#8d5524', // Skin shadow (chin/neck)
-      'W': '#f8fafc', // Eye sclera
-      'E': '#0f172a', // Eye pupil
-      'F': '#9a3412', // Fur tunic base
-      'f': '#c2410c', // Fur highlight
-      'f2': '#7c2d12',// Fur shadow
-      'L': '#451a03', // Leather belt/boots
-      'P': '#78350f', // Spear shaft
-      'M': '#94a3b8', // Flint/Stone blade
-      'm': '#e2e8f0', // Flint edge highlight
-      'B': '#d97706', // Basket weave
+      'O': '#18100c', 'H': '#291d16', 'h': '#443227', 'G': '#9ca3af',
+      'S': '#c68642', 's': '#e0ac69', 'd': '#8d5524',
+      'W': '#f8fafc', 'E': '#0f172a',
+      'F': '#9a3412', 'f': '#c2410c', 'L': '#451a03',
+      'P': '#78350f', 'M': '#94a3b8', 'm': '#e2e8f0', 'B': '#d97706'
     };
 
-    // Frame 1 & Frame 2 for Hunter (with visible face, eyes, fur wrap, flint spear)
-    const hunterFrame1 = [
+    const texHunter1 = buildSpriteFromMatrix([
       '.............O......',
       '............OMO.....',
       '...........OMmO.....',
@@ -395,7 +638,7 @@
       '.....OHhhhHO.O......',
       '....OHHHHHHHOOPO....',
       '....OHssSssHOOPO....',
-      '....OHWEsEWHOOPO....', // Clear eyes!
+      '....OHWEsEWHOOPO....',
       '....O.SsdSs.O.P.....',
       '.....OSSSSSO..P.....',
       '......OdddO...P.....',
@@ -412,9 +655,9 @@
       '.....OLLO..OLLO.....',
       '....OLLO....OLLO....',
       '....OOO......OOO....',
-    ];
+    ], humanPalette);
 
-    const hunterFrame2 = [
+    const texHunter2 = buildSpriteFromMatrix([
       '.............O......',
       '............OMO.....',
       '...........OMmO.....',
@@ -439,10 +682,9 @@
       '......OLLO.OLLO.....',
       '.....OLLO...OLLO....',
       '.....OOO.....OOO....',
-    ];
+    ], humanPalette);
 
-    // Gatherer (carrying basket, hair bun)
-    const gathererFrame1 = [
+    const texGatherer = buildSpriteFromMatrix([
       '......OOOO..........',
       '.....OHhhhHO........',
       '....OHHHHHHHO.......',
@@ -464,10 +706,9 @@
       '.....OLLO..OLLO.....',
       '....OLLO....OLLO....',
       '....OOO......OOO....',
-    ];
+    ], humanPalette);
 
-    // Elder (gray beard, wooden staff)
-    const elderFrame = [
+    const texElder = buildSpriteFromMatrix([
       '..O.................',
       '.OHO................',
       '.OHO..OOOOO.........',
@@ -486,14 +727,8 @@
       '.OPO...OSSO.OSSO....',
       '.OPO...OLLO.OLLO....',
       '.OOO...OOO...OOO....',
-    ];
+    ], humanPalette);
 
-    const texHunter1 = buildSpriteFromMatrix(hunterFrame1, humanPalette);
-    const texHunter2 = buildSpriteFromMatrix(hunterFrame2, humanPalette);
-    const texGatherer = buildSpriteFromMatrix(gathererFrame1, humanPalette);
-    const texElder = buildSpriteFromMatrix(elderFrame, humanPalette);
-
-    // Gazelle / Antelope (20x16)
     const gazelleTex = buildSpriteFromMatrix([
       '.............O.O....',
       '............O...O...',
@@ -508,11 +743,8 @@
       '..O.O.....O.O.......',
       '.O..O.....O..O......',
       '.O..O.....O..O......',
-    ], {
-      'O': '#291d16', 'D': '#d97706', 'W': '#fef3c7', 'E': '#0f172a'
-    });
+    ], { 'O': '#291d16', 'D': '#d97706', 'W': '#fef3c7', 'E': '#0f172a' });
 
-    // Detailed Biome Trees (34x36)
     const acaciaTex = buildSpriteFromMatrix([
       '........OOOOOOOOOOOOOO............',
       '....OOOOLLLLLLLLLLLLLLOOOO........',
@@ -537,9 +769,7 @@
       '...........OOBBBBBO...............',
       '..........OOBBBBBBBBO.............',
       '.........OOOOOOOOOOOOO............',
-    ], {
-      'O': '#0f291e', 'L': '#86efac', 'G': '#22c55e', 'D': '#15803d', 'B': '#5c3a21'
-    });
+    ], { 'O': '#0f291e', 'L': '#86efac', 'G': '#22c55e', 'D': '#15803d', 'B': '#5c3a21' });
 
     const jungleTex = buildSpriteFromMatrix([
       '......OOOOOOOOOO........',
@@ -557,9 +787,7 @@
       '........OOBBBBO.........',
       '.......OOBBBBBBO........',
       '......OOOOOOOOOOO.......',
-    ], {
-      'O': '#052e16', 'L': '#4ade80', 'G': '#16a34a', 'D': '#14532d', 'B': '#451a03'
-    });
+    ], { 'O': '#052e16', 'L': '#4ade80', 'G': '#16a34a', 'D': '#14532d', 'B': '#451a03' });
 
     const pineTex = buildSpriteFromMatrix([
       '.........OO.........',
@@ -578,9 +806,7 @@
       '........OBBO........',
       '........OBBO........',
       '.......OOOOOO.......',
-    ], {
-      'O': '#022c22', 'G': '#10b981', 'D': '#065f46', 'B': '#451a03'
-    });
+    ], { 'O': '#022c22', 'G': '#10b981', 'D': '#065f46', 'B': '#451a03' });
 
     const cactusTex = buildSpriteFromMatrix([
       '....OOO......',
@@ -593,11 +819,8 @@
       '...OGGDO.....',
       '...OGGDO.....',
       '...OOOOO.....',
-    ], {
-      'O': '#052e16', 'G': '#4ade80', 'D': '#15803d'
-    });
+    ], { 'O': '#052e16', 'G': '#4ade80', 'D': '#15803d' });
 
-    // Grass Tuft / Pebble / Bush
     const grassTex = buildSpriteFromMatrix([
       '..O...O...',
       '.OGO.OG..O',
@@ -615,7 +838,6 @@
       '.OOOOOOOOOO.',
     ], { 'O': '#1e293b', 'L': '#cbd5e1', 'M': '#94a3b8', 'D': '#475569' });
 
-    // Hide Hut Shelter (36x28)
     const hutTex = buildSpriteFromMatrix([
       '.............O..O.............',
       '............O.OO.O............',
@@ -631,148 +853,10 @@
       'OFFFFffffOIIIIIIIIIIIIOffFFFFO',
       'OLLLLLLLLLOIIIIIIIIIIIOLLLLLLO',
       'OOOOOOOOOOOOOOOOOOOOOOOOOOOOOO',
-    ], {
-      'O': '#1c1917', 'F': '#9a3412', 'f': '#c2410c', 'L': '#78350f', 'I': '#0c0a09'
-    });
-
-    // Seamless 64x64 Micro Ground Pixel Texture (Overlays real biome tints)
-    const microGroundCanvas = document.createElement('canvas');
-    microGroundCanvas.width = 64; microGroundCanvas.height = 64;
-    const mgCtx = microGroundCanvas.getContext('2d');
-    for (let y = 0; y < 64; y++) {
-      for (let x = 0; x < 64; x++) {
-        const r = Math.random();
-        if (r < 0.14) {
-          mgCtx.fillStyle = 'rgba(0, 0, 0, 0.12)';
-          mgCtx.fillRect(x, y, 1, 1);
-        } else if (r < 0.25) {
-          mgCtx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-          mgCtx.fillRect(x, y, 1, 1);
-        } else if (r < 0.28) {
-          // Tiny 2px grass blade speck
-          mgCtx.fillStyle = 'rgba(20, 83, 45, 0.22)';
-          mgCtx.fillRect(x, y, 1, 2);
-        }
-      }
-    }
-    const microGroundTex = PIXI.Texture.from(microGroundCanvas);
-    microGroundTex.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
-    const microGroundTiling = new PIXI.TilingSprite(microGroundTex, MAP_WIDTH, MAP_HEIGHT);
-    microGroundTiling.tileScale.set(0.0025);
-    microGroundTiling.alpha = 0;
-    groundDetailLayer.addChild(microGroundTiling);
+    ], { 'O': '#1c1917', 'F': '#9a3412', 'f': '#c2410c', 'L': '#78350f', 'I': '#0c0a09' });
 
     // =========================================================
-    // 3. LOAD & QUANTIZE EARTH INTO VIBRANT 8-BIT + BIOME MAP
-    // =========================================================
-    // Biome IDs: 0=Ocean, 1=Shallow, 2=Desert, 3=Savanna, 4=Grass, 5=Forest, 6=Mountain, 7=Snow
-    const biomeGrid = new Uint8Array(MAP_WIDTH * MAP_HEIGHT);
-
-    // Default procedural fallback while texture loads
-    const pixelCanvas = document.createElement('canvas');
-    pixelCanvas.width = MAP_WIDTH; pixelCanvas.height = MAP_HEIGHT;
-    const pCtx = pixelCanvas.getContext('2d');
-    pCtx.fillStyle = '#0f2b66';
-    pCtx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
-
-    const smoothCanvas = document.createElement('canvas');
-    smoothCanvas.width = MAP_WIDTH; smoothCanvas.height = MAP_HEIGHT;
-    const sCtx = smoothCanvas.getContext('2d');
-    sCtx.fillStyle = '#0f2b66';
-    sCtx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
-
-    const pixelTex = PIXI.Texture.from(pixelCanvas);
-    pixelTex.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
-    const mapPixelSprite = new PIXI.Sprite(pixelTex);
-    mapPixelLayer.addChild(mapPixelSprite);
-
-    const smoothTex = PIXI.Texture.from(smoothCanvas);
-    smoothTex.baseTexture.scaleMode = PIXI.SCALE_MODES.LINEAR;
-    const mapSmoothSprite = new PIXI.Sprite(smoothTex);
-    mapSmoothLayer.addChild(mapSmoothSprite);
-
-    // Load NASA Earth Texture with CORS enabled and convert to vibrant 8-bit palette
-    const earthImg = new Image();
-    earthImg.crossOrigin = "anonymous";
-    earthImg.src = "https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/textures/planets/earth_atmos_2048.jpg";
-
-    earthImg.onload = () => {
-      try {
-        const tmp = document.createElement('canvas');
-        tmp.width = MAP_WIDTH; tmp.height = MAP_HEIGHT;
-        const tCtx = tmp.getContext('2d');
-        tCtx.drawImage(earthImg, 0, 0, MAP_WIDTH, MAP_HEIGHT);
-        const imgData = tCtx.getImageData(0, 0, MAP_WIDTH, MAP_HEIGHT);
-        const data = imgData.data;
-
-        for (let i = 0, px = 0; i < data.length; i += 4, px++) {
-          const r = data[i], g = data[i+1], b = data[i+2];
-          const lum = (r + g + b) / 3;
-          let nr = r, ng = g, nb = b, biome = 0;
-
-          if (b > r + 12 && b > g + 4) {
-            // Water
-            if (b > 110 || lum > 85) {
-              biome = 1; nr = 14; ng = 116; nb = 178; // Shallow turquoise shelf
-            } else if (lum > 45) {
-              biome = 0; nr = 15; ng = 52; nb = 122;  // Mid ocean
-            } else {
-              biome = 0; nr = 9; ng = 28; nb = 76;    // Deep trench
-            }
-          } else if (r > 185 && g > 185 && b > 185) {
-            // Snow / Ice
-            biome = 7;
-            if (lum > 220) { nr = 241; ng = 245; nb = 249; }
-            else { nr = 203; ng = 213; nb = 225; }
-          } else if (r > 135 && g > 105 && b < 110 && r > g + 8) {
-            // Desert
-            biome = 2;
-            if (lum > 170) { nr = 232; ng = 191; nb = 122; }
-            else { nr = 201; ng = 151; nb = 84; }
-          } else if (r >= g - 12 && g > b + 15 && r > 85) {
-            // Savanna / Steppe
-            biome = 3;
-            if (lum > 115) { nr = 166; ng = 175; nb = 74; }
-            else { nr = 132; ng = 146; nb = 58; }
-          } else if (g >= r && g > b) {
-            // Forest / Jungle / Lush Plains
-            if (lum < 85) {
-              biome = 5; nr = 22; ng = 101; nb = 52;  // Dense Jungle/Forest
-            } else {
-              biome = 4; nr = 58; ng = 154; nb = 68;  // Vibrant Grassland
-            }
-          } else {
-            // Mountain / Tundra / Rock
-            biome = 6;
-            if (lum > 130) { nr = 148; ng = 140; nb = 132; }
-            else { nr = 96; ng = 90; nb = 84; }
-          }
-
-          data[i] = nr; data[i+1] = ng; data[i+2] = nb;
-          biomeGrid[px] = biome;
-        }
-
-        pCtx.putImageData(imgData, 0, 0);
-        sCtx.putImageData(imgData, 0, 0);
-        pixelTex.baseTexture.update();
-        smoothTex.baseTexture.update();
-
-        // Ensure camp coordinate is strictly on solid savanna land
-        let cx = Math.floor(CAMP_POS.x), cy = Math.floor(CAMP_POS.y);
-        if (biomeGrid[cy * MAP_WIDTH + cx] <= 1) {
-          CAMP_POS.x += 8;
-        }
-      } catch (e) {
-        // Fallback if canvas tainted
-        sCtx.drawImage(earthImg, 0, 0, MAP_WIDTH, MAP_HEIGHT);
-        pCtx.drawImage(earthImg, 0, 0, MAP_WIDTH, MAP_HEIGHT);
-        pixelTex.baseTexture.update();
-        smoothTex.baseTexture.update();
-      }
-    };
-
-    // =========================================================
-    // 4. PROCEDURAL VIEWPORT TREE & GROUND FOLIAGE POOLS
+    // 5. PROCEDURAL VIEWPORT TREE & GROUND FOLIAGE POOLS
     // =========================================================
     const TREE_POOL_SIZE = 1200;
     const treePool = [];
@@ -794,21 +878,20 @@
       propPool.push(sp);
     }
 
-    // Fast deterministic spatial hash
     function hash2D(x, y) {
       let n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453123;
       return n - Math.floor(n);
     }
 
     function updateProceduralFoliage(zoom) {
-      // Fade trees smoothly between 32x and 85x zoom
-      const treeAlpha = Math.max(0, Math.min(1, (zoom - 32) / 53));
+      // Trees fade in smoothly between 38x and 95x zoom
+      const treeAlpha = Math.max(0, Math.min(1, (zoom - 38) / 57));
       treeLayer.alpha = treeAlpha;
 
       if (treeAlpha <= 0.01) {
         for (let i = 0; i < TREE_POOL_SIZE; i++) treePool[i].visible = false;
       } else {
-        const CELL = 0.72; // World units per tree cell
+        const CELL = 1.25;
         const startX = Math.max(0, Math.floor((-world.x / zoom) / CELL) - 1);
         const endX = Math.min(Math.floor(MAP_WIDTH / CELL), Math.ceil(((window.innerWidth - world.x) / zoom) / CELL) + 1);
         const startY = Math.max(0, Math.floor((-world.y / zoom) / CELL) - 1);
@@ -821,20 +904,20 @@
             const wx = (cx + h1 * 0.8) * CELL;
             const wy = (cy + hash2D(cx + 13, cy + 7) * 0.8) * CELL;
 
-            // Keep camp clearing free of trees
-            if (Math.hypot(wx - CAMP_POS.x, wy - CAMP_POS.y) < 1.1) continue;
+            // Keep camp clearing open
+            if (Math.hypot(wx - CAMP_POS.x, wy - CAMP_POS.y) < 1.6) continue;
 
-            const px = Math.min(MAP_WIDTH - 1, Math.max(0, Math.floor(wx)));
-            const py = Math.min(MAP_HEIGHT - 1, Math.max(0, Math.floor(wy)));
-            const b = biomeGrid[py * MAP_WIDTH + px];
+            // Map 4096x2048 world coordinates to 2048x1024 biomeGrid
+            const gx = Math.min(DATA_W - 1, Math.max(0, Math.floor(wx * 0.5)));
+            const gy = Math.min(DATA_H - 1, Math.max(0, Math.floor(wy * 0.5)));
+            const b = biomeGrid[gy * DATA_W + gx];
 
-            if (b <= 1 || b === 7) continue; // No trees in Ocean/Snow
+            if (b === 0 || b === 7) continue;
 
-            // Biome-specific density
             let chance = 0;
             let tex = acaciaTex;
-            if (b === 5) { chance = 0.65; tex = jungleTex; }
-            else if (b === 4) { chance = 0.42; tex = (wy < 300 || wy > 720) ? pineTex : jungleTex; }
+            if (b === 5) { chance = 0.68; tex = jungleTex; }
+            else if (b === 4) { chance = 0.44; tex = (wy < 600 || wy > 1440) ? pineTex : jungleTex; }
             else if (b === 3) { chance = 0.25; tex = acaciaTex; }
             else if (b === 2) { chance = 0.06; tex = cactusTex; }
             else if (b === 6) { chance = 0.14; tex = pineTex; }
@@ -845,7 +928,7 @@
               sp.x = wx;
               sp.y = wy;
               const sizeVar = 0.85 + hash2D(cx * 3, cy * 5) * 0.35;
-              sp.scale.set(0.0052 * sizeVar);
+              sp.scale.set(0.0085 * sizeVar);
               sp.visible = true;
             }
           }
@@ -860,7 +943,7 @@
       if (propAlpha <= 0.01) {
         for (let i = 0; i < PROP_POOL_SIZE; i++) propPool[i].visible = false;
       } else {
-        const PCELL = 0.22;
+        const PCELL = 0.38;
         const startX = Math.max(0, Math.floor((-world.x / zoom) / PCELL) - 1);
         const endX = Math.min(Math.floor(MAP_WIDTH / PCELL), Math.ceil(((window.innerWidth - world.x) / zoom) / PCELL) + 1);
         const startY = Math.max(0, Math.floor((-world.y / zoom) / PCELL) - 1);
@@ -875,16 +958,16 @@
             const wx = (cx + hash2D(cx, cy)) * PCELL;
             const wy = (cy + hash2D(cx + 9, cy + 4)) * PCELL;
 
-            const px = Math.min(MAP_WIDTH - 1, Math.max(0, Math.floor(wx)));
-            const py = Math.min(MAP_HEIGHT - 1, Math.max(0, Math.floor(wy)));
-            const b = biomeGrid[py * MAP_WIDTH + px];
-            if (b <= 1) continue;
+            const gx = Math.min(DATA_W - 1, Math.max(0, Math.floor(wx * 0.5)));
+            const gy = Math.min(DATA_H - 1, Math.max(0, Math.floor(wy * 0.5)));
+            const b = biomeGrid[gy * DATA_W + gx];
+            if (b === 0) continue;
 
             const sp = propPool[idx++];
             sp.texture = (h < 0.08 || b === 2 || b === 6) ? rockTex : grassTex;
             sp.x = wx;
             sp.y = wy;
-            sp.scale.set(0.0020);
+            sp.scale.set(0.0036);
             sp.visible = true;
           }
         }
@@ -893,76 +976,60 @@
     }
 
     // =========================================================
-    // 5. CREATE THE 300,000 BCE RIFT VALLEY CAMP
+    // 6. CREATE THE 300,000 BCE RIFT VALLEY CAMP
     // =========================================================
     const campEntities = [];
     const smokeParticles = [];
     let fireGraphic = new PIXI.Graphics();
 
     function buildCamp(center) {
-      // Trampled dirt clearing circle
-      const dirt = new PIXI.Graphics();
-      dirt.beginFill(0x785636, 0.55);
-      dirt.drawCircle(center.x, center.y, 0.85);
-      dirt.beginFill(0x5c3a21, 0.45);
-      dirt.drawCircle(center.x, center.y, 0.45);
-      dirt.endFill();
-      campGroundLayer.addChild(dirt);
-
-      // 3 Hide Shelters arranged around the fire
       const hutOffsets = [
-        { dx: -0.45, dy: -0.35 },
-        { dx: 0.48, dy: -0.25 },
-        { dx: -0.25, dy: 0.45 }
+        { dx: -0.75, dy: -0.55 },
+        { dx: 0.78, dy: -0.45 },
+        { dx: -0.45, dy: 0.72 }
       ];
       hutOffsets.forEach(o => {
         const hut = new PIXI.Sprite(hutTex);
         hut.anchor.set(0.5, 0.85);
         hut.x = center.x + o.dx;
         hut.y = center.y + o.dy;
-        hut.scale.set(0.0042);
+        hut.scale.set(0.0072);
         campLayer.addChild(hut);
       });
 
-      // Central Campfire
       campLayer.addChild(fireGraphic);
 
       for (let i = 0; i < 16; i++) {
         const p = new PIXI.Graphics();
-        p.beginFill(0xcbd5e1, 0.6);
-        p.drawRect(-0.005, -0.005, 0.012, 0.012);
+        p.beginFill(0xcbd5e1, 0.65);
+        p.drawRect(-0.008, -0.008, 0.02, 0.02);
         p.endFill();
-        p.x = center.x;
-        p.y = center.y - 0.02;
+        p.x = center.x; p.y = center.y - 0.03;
         p.alpha = Math.random();
         p.life = Math.random();
         smokeParticles.push(p);
         campLayer.addChild(p);
       }
 
-      // 16 Detailed Humans (Hunters, Gatherers, Elders)
       const names = ["Kael", "Mara", "Orin", "Zuri", "Tark", "Sora", "Bram", "Nia", "Daro", "Luma", "Vek", "Rhea", "Kora", "Garr", "Tali", "Jor"];
-      const roles = ["Hunter", "Gatherer", "Firekeeper"];
-
       for (let i = 0; i < 16; i++) {
         const role = i === 0 ? "Firekeeper" : (i % 2 === 0 ? "Hunter" : "Gatherer");
         const container = new PIXI.Container();
 
-        // Soft drop shadow
         const shadow = new PIXI.Graphics();
-        shadow.beginFill(0x000000, 0.35);
-        shadow.drawEllipse(0, 0, 0.02, 0.008);
+        shadow.beginFill(0x000000, 0.38);
+        shadow.drawEllipse(0, 0, 0.035, 0.015);
         shadow.endFill();
         container.addChild(shadow);
 
         const tex = role === "Firekeeper" ? texElder : (role === "Hunter" ? texHunter1 : texGatherer);
         const sp = new PIXI.Sprite(tex);
         sp.anchor.set(0.5, 0.95);
-        sp.scale.set(0.0024);
+        sp.scale.set(0.0040); // Crisp ~40px tall at 450x zoom
         container.addChild(sp);
 
         const angle = Math.random() * Math.PI * 2;
-        const dist = 0.1 + Math.random() * 0.65;
+        const dist = 0.15 + Math.random() * 1.1;
         container.x = center.x + Math.cos(angle) * dist;
         container.y = center.y + Math.sin(angle) * dist;
 
@@ -978,46 +1045,35 @@
 
         campLayer.addChild(container);
         campEntities.push({
-          container,
-          sprite: sp,
-          role,
-          home: center,
-          targetX: container.x,
-          targetY: container.y,
-          waitTimer: Math.random() * 120,
-          animTimer: Math.random() * 10
+          container, sprite: sp, role, home: center,
+          targetX: container.x, targetY: container.y,
+          waitTimer: Math.random() * 120, animTimer: Math.random() * 10
         });
       }
 
-      // Grazing Gazelles nearby
       for (let i = 0; i < 6; i++) {
         const g = new PIXI.Sprite(gazelleTex);
         g.anchor.set(0.5, 0.9);
-        g.scale.set(0.0022);
-        g.x = center.x + 1.2 + Math.random() * 0.9;
-        g.y = center.y - 0.5 + Math.random() * 1.0;
+        g.scale.set(0.0038);
+        g.x = center.x + 2.1 + Math.random() * 1.4;
+        g.y = center.y - 0.8 + Math.random() * 1.6;
         campLayer.addChild(g);
         campEntities.push({
-          container: g,
-          sprite: g,
-          role: "Wildlife",
-          home: { x: center.x + 1.5, y: center.y },
-          targetX: g.x,
-          targetY: g.y,
-          waitTimer: Math.random() * 180,
-          animTimer: 0
+          container: g, sprite: g, role: "Wildlife",
+          home: { x: center.x + 2.5, y: center.y },
+          targetX: g.x, targetY: g.y,
+          waitTimer: Math.random() * 180, animTimer: 0
         });
       }
     }
 
     buildCamp(CAMP_POS);
 
-    // Orbital Beacon
     const beacon = new PIXI.Graphics();
     beaconLayer.addChild(beacon);
 
     // =========================================================
-    // 6. CAMERA, BOUNDARY CLAMPING & LOGARITHMIC DIVE
+    // 7. CAMERA, BOUNDARY CLAMPING & LOGARITHMIC DIVE
     // =========================================================
     function getMinZoom() {
       return Math.max(window.innerWidth / MAP_WIDTH, window.innerHeight / MAP_HEIGHT);
@@ -1040,38 +1096,27 @@
     world.scale.set(getMinZoom());
     clampCamera();
 
-    // Smooth Exponential Flight Camera
     let fly = {
-      active: false,
-      startTime: 0,
-      duration: 2400, // 2.4 sec smooth flight
-      startZoom: 1,
-      endZoom: 1,
-      startFocusX: 0,
-      startFocusY: 0,
-      endFocusX: 0,
-      endFocusY: 0
+      active: false, startTime: 0, duration: 2400,
+      startZoom: 1, endZoom: 1,
+      startFocusX: 0, startFocusY: 0, endFocusX: 0, endFocusY: 0
     };
 
     function flyTo(worldX, worldY, targetZoom, duration = 2400) {
       const curZoom = world.scale.x;
-      const curCenterX = (window.innerWidth / 2 - world.x) / curZoom;
-      const curCenterY = (window.innerHeight / 2 - world.y) / curZoom;
-
       fly = {
         active: true,
         startTime: performance.now(),
         duration,
         startZoom: curZoom,
         endZoom: targetZoom,
-        startFocusX: curCenterX,
-        startFocusY: curCenterY,
+        startFocusX: (window.innerWidth / 2 - world.x) / curZoom,
+        startFocusY: (window.innerHeight / 2 - world.y) / curZoom,
         endFocusX: worldX,
         endFocusY: worldY
       };
     }
 
-    // Drag & Zoom Input
     let isDragging = false;
     let dragStart = { x: 0, y: 0 };
     let worldStart = { x: 0, y: 0 };
@@ -1127,14 +1172,14 @@
     });
 
     // =========================================================
-    // 7. UI & TIMELINE LOGIC
+    // 8. UI & TIMELINE LOGIC
     // =========================================================
     document.getElementById('start-btn').addEventListener('click', () => {
       gameStarted = true;
       const modal = document.getElementById('intro-modal');
       modal.style.opacity = '0';
       setTimeout(() => modal.style.display = 'none', 600);
-      flyTo(CAMP_POS.x, CAMP_POS.y, 420.0, 2600);
+      flyTo(CAMP_POS.x, CAMP_POS.y, 260.0, 2600);
     });
 
     document.getElementById('btn-orbit').addEventListener('click', () => {
@@ -1142,7 +1187,7 @@
     });
 
     document.getElementById('btn-camp').addEventListener('click', () => {
-      flyTo(CAMP_POS.x, CAMP_POS.y, 420.0, 1800);
+      flyTo(CAMP_POS.x, CAMP_POS.y, 260.0, 1800);
     });
 
     let currentYear = 300000;
@@ -1185,10 +1230,9 @@
       document.getElementById('era-label').innerText = "THE COASTAL MIGRATION";
       document.getElementById('pop-label').innerText = "48,000";
 
-      // Spawn a second camp in the Levant / Arabia
-      const arabiaPos = { x: CAMP_POS.x + 35, y: CAMP_POS.y - 90 };
+      const arabiaPos = { x: CAMP_POS.x + 70, y: CAMP_POS.y - 180 };
       buildCamp(arabiaPos);
-      flyTo(arabiaPos.x, arabiaPos.y, 400.0, 2200);
+      flyTo(arabiaPos.x, arabiaPos.y, 260.0, 2200);
 
       milestones = { 1: false, 2: false, 3: false };
       document.getElementById('m1').className = 'milestone-btn';
@@ -1200,7 +1244,6 @@
       checkUnlock();
     });
 
-    // Intervene Modal
     document.getElementById('btn-intervene').onclick = () => {
       document.getElementById('intervention-modal').style.display = 'flex';
     };
@@ -1210,13 +1253,13 @@
     document.getElementById('submit-intervene').onclick = () => {
       const val = document.getElementById('intervene-input').value.trim();
       if (!val) return;
-      alert(`Intervention Logged: "${val}"\n(Next step: Connect this to the Gemini API route to dynamically mutate biomes & species!)`);
+      alert(`Intervention Logged: "${val}"\n(Next step: Connect this to the Gemini API route!)`);
       document.getElementById('intervene-input').value = '';
       document.getElementById('intervention-modal').style.display = 'none';
     };
 
     // =========================================================
-    // 8. MAIN RENDER & SIMULATION LOOP
+    // 9. MAIN RENDER & SIMULATION LOOP
     // =========================================================
     let ticker = 0;
     app.ticker.add(() => {
@@ -1234,10 +1277,8 @@
       if (fly.active) {
         const now = performance.now();
         let t = Math.min(1, (now - fly.startTime) / fly.duration);
-        // Smooth easeInOutCubic
         const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
-        // Logarithmic zoom interpolation feels natural from 1x to 450x!
         const logZ = Math.log(fly.startZoom) + (Math.log(fly.endZoom) - Math.log(fly.startZoom)) * ease;
         const curZ = Math.exp(logZ);
 
@@ -1255,36 +1296,32 @@
       const zoom = world.scale.x;
       document.getElementById('zoom-text').innerText = zoom.toFixed(1) + 'x';
 
-      // Altitude HUD text
+      // Sync Shader Uniforms to Current Camera
+      earthShader.uniforms.uScreenSize = [app.screen.width, app.screen.height];
+      earthShader.uniforms.uWorldOffset = [world.x, world.y];
+      earthShader.uniforms.uZoom = zoom;
+      earthShader.uniforms.uTime = ticker;
+
       let alt = "Orbit";
-      if (zoom > 300) alt = "Camp Ground (Micro)";
-      else if (zoom > 100) alt = "Local Savanna";
-      else if (zoom > 30) alt = "Regional Valley";
-      else if (zoom > 5) alt = "Continental";
+      if (zoom > 200) alt = "Camp Ground (Micro)";
+      else if (zoom > 80) alt = "Local Savanna";
+      else if (zoom > 25) alt = "Regional Valley";
+      else if (zoom > 4) alt = "Continental";
       document.getElementById('altitude-label').innerText = `Altitude: ${alt}`;
 
-      // Smooth Cross-Fade of Ground Resolution & Foliage
-      // 1. Fade out blocky Earth pixels between 18x and 45x so terrain becomes smooth & grassy
-      mapPixelLayer.alpha = 1 - Math.max(0, Math.min(1, (zoom - 18) / 27));
-      // 2. Fade in crisp micro-pixel ground tiles between 45x and 140x
-      microGroundTiling.alpha = Math.max(0, Math.min(0.85, (zoom - 45) / 95));
-
-      // 3. Fade in procedural trees & props
+      // Smoothly Fade Procedural Foliage & Camp
       updateProceduralFoliage(zoom);
 
-      // 4. Fade in Camp & Humans smoothly between 90x and 210x
-      const campAlpha = Math.max(0, Math.min(1, (zoom - 90) / 120));
+      const campAlpha = Math.max(0, Math.min(1, (zoom - 110) / 110));
       campLayer.alpha = campAlpha;
-      campGroundLayer.alpha = campAlpha;
       campLayer.visible = campAlpha > 0.01;
-      campGroundLayer.visible = campAlpha > 0.01;
 
-      // 5. Orbit Beacon (fades out completely once trees start appearing)
+      // Orbit Beacon
       beacon.clear();
-      const beaconAlpha = 1 - Math.max(0, Math.min(1, (zoom - 10) / 25));
+      const beaconAlpha = 1 - Math.max(0, Math.min(1, (zoom - 12) / 24));
       if (beaconAlpha > 0.02) {
-        const pulse = Math.sin(ticker * 2) * 1.5;
-        const r = Math.max(1.5, (8 + pulse) / Math.sqrt(zoom));
+        const pulse = Math.sin(ticker * 2) * 2.5;
+        const r = Math.max(2.5, (14 + pulse) / Math.sqrt(zoom));
         beacon.beginFill(0xfbbf24, 0.35 * beaconAlpha);
         beacon.drawCircle(CAMP_POS.x, CAMP_POS.y, r);
         beacon.beginFill(0x38bdf8, beaconAlpha);
@@ -1292,62 +1329,52 @@
         beacon.endFill();
       }
 
-      // 6. Animate Camp, Fire, Smoke, and Walking People (Only when visible)
+      // Animate Campfire, Smoke, and Walking People
       if (campLayer.visible) {
-        // Campfire stones & flickering flames
         fireGraphic.clear();
         fireGraphic.beginFill(0x475569);
-        fireGraphic.drawCircle(CAMP_POS.x, CAMP_POS.y, 0.032);
+        fireGraphic.drawCircle(CAMP_POS.x, CAMP_POS.y, 0.055);
         fireGraphic.beginFill(0xf97316);
-        const fSize = 0.018 + Math.sin(ticker * 6) * 0.004;
+        const fSize = 0.032 + Math.sin(ticker * 6) * 0.008;
         fireGraphic.drawRect(CAMP_POS.x - fSize/2, CAMP_POS.y - fSize, fSize, fSize * 1.4);
         fireGraphic.beginFill(0xfef08a);
-        fireGraphic.drawRect(CAMP_POS.x - 0.006, CAMP_POS.y - 0.012, 0.012, 0.012);
+        fireGraphic.drawRect(CAMP_POS.x - 0.01, CAMP_POS.y - 0.02, 0.02, 0.02);
         fireGraphic.endFill();
 
-        // Rising smoke pixels
         smokeParticles.forEach(p => {
           p.life -= 0.01;
-          p.y -= 0.0025;
-          p.x += Math.sin(ticker + p.life * 5) * 0.0005;
-          p.alpha = p.life * 0.6;
+          p.y -= 0.004;
+          p.x += Math.sin(ticker + p.life * 5) * 0.0008;
+          p.alpha = p.life * 0.65;
           if (p.life <= 0) {
-            p.x = CAMP_POS.x + (Math.random() - 0.5) * 0.015;
-            p.y = CAMP_POS.y - 0.015;
+            p.x = CAMP_POS.x + (Math.random() - 0.5) * 0.025;
+            p.y = CAMP_POS.y - 0.025;
             p.life = 1.0;
           }
         });
 
-        // Autonomous AI wandering & 2-frame walk animation
-        const spd = timeSpeed === 0 ? 0 : (timeSpeed === 5 ? 0.0045 : 0.0018);
+        const spd = timeSpeed === 0 ? 0 : (timeSpeed === 5 ? 0.008 : 0.003);
         campEntities.forEach(ent => {
           if (spd === 0) return;
-
-          if (ent.waitTimer > 0) {
-            ent.waitTimer--;
-            return;
-          }
+          if (ent.waitTimer > 0) { ent.waitTimer--; return; }
 
           const dx = ent.targetX - ent.container.x;
           const dy = ent.targetY - ent.container.y;
           const dist = Math.hypot(dx, dy);
 
-          if (dist < 0.02) {
-            // Pick a new nearby destination
+          if (dist < 0.03) {
             ent.waitTimer = 60 + Math.random() * 160;
             const ang = Math.random() * Math.PI * 2;
-            const rad = ent.role === "Firekeeper" ? (0.06 + Math.random() * 0.12) : (0.08 + Math.random() * 0.65);
+            const rad = ent.role === "Firekeeper" ? (0.1 + Math.random() * 0.2) : (0.12 + Math.random() * 1.15);
             ent.targetX = ent.home.x + Math.cos(ang) * rad;
             ent.targetY = ent.home.y + Math.sin(ang) * rad;
           } else {
             ent.container.x += (dx / dist) * spd;
             ent.container.y += (dy / dist) * spd;
 
-            // Face walking direction
             const baseScale = Math.abs(ent.sprite.scale.x);
             ent.sprite.scale.x = dx < 0 ? -baseScale : baseScale;
 
-            // Walk frame animation for Hunters
             if (ent.role === "Hunter") {
               ent.animTimer += 0.25;
               ent.sprite.texture = (Math.floor(ent.animTimer) % 2 === 0) ? texHunter1 : texHunter2;
