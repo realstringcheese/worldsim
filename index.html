@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Chronos: Prehistoric 8-Bit Earth</title>
-  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" />
-  <script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.19.0/dist/maplibre-gl.css" />
+  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@6.19.0/dist/maplibre-gl.js"></script>
   <style>
     :root {
       --bg: #020617;
@@ -27,19 +27,13 @@
       height: 100vh;
     }
 
-    #map {
-      position: fixed;
-      inset: 0;
-      z-index: 1;
-    }
-    /* Crisp 8-bit pixelation on MapLibre's WebGL canvas */
+    #map { position: fixed; inset: 0; z-index: 1; }
     #map.pixel-mode .maplibregl-canvas {
       image-rendering: pixelated;
       image-rendering: crisp-edges;
     }
     .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left { display: none !important; }
 
-    /* Overlay canvas for crisp animated 8-bit humans, animals, fire & night glow */
     #sprite-canvas {
       position: fixed;
       inset: 0;
@@ -105,42 +99,22 @@
     .track-toggle.active { border-color: var(--accent); background: rgba(56, 189, 248, 0.12); color: #fff; font-weight: 700; }
     .track-note { font-size: 0.68rem; color: #94a3b8; padding: 2px 4px; line-height: 1.35; }
 
-    /* Pin Markers Overlay */
-    #pins-layer {
-      position: fixed;
-      inset: 0;
-      z-index: 25;
-      pointer-events: none;
-    }
+    /* Pin Markers */
+    #pins-layer { position: fixed; inset: 0; z-index: 25; pointer-events: none; }
     .map-pin {
-      position: absolute;
-      transform: translate(-50%, -100%);
-      pointer-events: auto;
-      cursor: pointer;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      position: absolute; transform: translate(-50%, -100%);
+      pointer-events: auto; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center;
       transition: opacity 0.25s;
     }
     .pin-label {
       background: rgba(2, 6, 23, 0.88);
       border: 1px solid rgba(255,255,255,0.25);
-      color: #fff;
-      font-size: 0.7rem;
-      font-weight: 700;
-      padding: 2px 7px;
-      border-radius: 4px;
-      white-space: nowrap;
-      margin-bottom: 3px;
+      color: #fff; font-size: 0.7rem; font-weight: 700;
+      padding: 2px 7px; border-radius: 4px; white-space: nowrap; margin-bottom: 3px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.6);
     }
-    .pin-dot {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      border: 2px solid #fff;
-      box-shadow: 0 0 10px rgba(0,0,0,0.8);
-    }
+    .pin-dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 10px rgba(0,0,0,0.8); }
 
     /* Toast */
     #chronicle-toast {
@@ -200,7 +174,7 @@
     /* Modals */
     #intro-modal {
       position: fixed; inset: 0;
-      background: rgba(2, 6, 23, 0.86);
+      background: rgba(2, 6, 23, 0.84);
       backdrop-filter: blur(8px);
       display: flex; flex-direction: column; justify-content: center; align-items: center;
       z-index: 9999; text-align: center; padding: 20px; transition: opacity 0.6s ease;
@@ -239,7 +213,8 @@
   <div id="intro-modal">
     <h1>CHRONOS</h1>
     <p>Powered by real Earth topography, global 3D mountain elevation, and vector rivers rendered as crisp 8-bit pixel art. Zero roads, zero cities—begin in 300,000 BCE.</p>
-    <button class="btn-start" id="start-btn">Loading Prehistoric Earth...</button>
+    <button class="btn-start" id="start-btn">ENTER 300,000 BCE</button>
+    <div id="load-status" style="margin-top: 12px; font-size: 0.78rem; color: #64748b;">Initializing Earth engine...</div>
   </div>
 
   <!-- Top HUD -->
@@ -334,7 +309,7 @@
     let gameStarted = false;
     let mapReady = false;
     let pixelMode = true;
-    const PIXEL_RATIO = 0.34; // Uniform crisp 8-bit pixels at every zoom!
+    const PIXEL_RATIO = 0.34;
 
     const ERAS = [
       { year: 300000, label: "300,000 BCE", name: "PALEOLITHIC DAWN", pop: "1,500" },
@@ -357,16 +332,9 @@
       mammothsAlive: true,
       saharaGreen: false,
       tribes: [
-        // East African Rift Valley (Serengeti/Ngorongoro plateau near Olduvai)
         { name: "Rift Valley Clan", lat: -2.99, lon: 35.35, fireLit: false, huts: 0 }
       ],
-      trackers: {
-        humans: true,
-        bears: false,
-        horses: false,
-        mammoths: false,
-        lions: false
-      }
+      trackers: { humans: true, bears: false, horses: false, mammoths: false, lions: false }
     };
 
     const SPECIES_ZONES = {
@@ -396,14 +364,13 @@
     };
 
     // =========================================================
-    // 2. REPROJECT 4K NASA BIOMES TO WEB MERCATOR CANVAS FOR MAPLIBRE
+    // 2. FAST ASYNC BIOME LAYER (NO STARTUP BLOCK!)
     // =========================================================
+    const TINY_PLACEHOLDER = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
     const biomeCanvas = document.createElement('canvas');
     biomeCanvas.width = 1024;
     biomeCanvas.height = 1024;
     const bCtx = biomeCanvas.getContext('2d');
-    bCtx.fillStyle = '#4e8a42';
-    bCtx.fillRect(0, 0, 1024, 1024);
 
     let eqDayData = null;
     const EQ_W = 2048, EQ_H = 1024;
@@ -415,7 +382,6 @@
       const dst = out.data;
 
       for (let y = 0; y < H; y++) {
-        // Inverse Web Mercator -> Equirectangular latitude
         const yMerc = 1.0 - 2.0 * ((y + 0.5) / H);
         const lat = (2.0 * Math.atan(Math.exp(Math.PI * yMerc)) - Math.PI / 2.0) * (180.0 / Math.PI);
         const sy = Math.min(EQ_H - 1, Math.max(0, Math.floor(((90.0 - lat) / 180.0) * EQ_H)));
@@ -426,13 +392,11 @@
           const di = (y * W + x) * 4;
 
           let r = eqDayData[si], g = eqDayData[si+1], b = eqDayData[si+2];
-          // Boost vibrancy
           const lum = 0.299 * r + 0.587 * g + 0.114 * b;
           r = Math.min(255, Math.max(0, lum + (r - lum) * 1.4));
           g = Math.min(255, Math.max(0, lum + (g - lum) * 1.45));
           b = Math.min(255, Math.max(0, lum + (b - lum) * 1.25));
 
-          // AI Sahara greening override
           if (simState.saharaGreen && lat > 14 && lat < 32 && (x / W) * 360 - 180 > -16 && (x / W) * 360 - 180 < 36) {
             r = 46; g = 148; b = 56;
           }
@@ -443,24 +407,16 @@
       bCtx.putImageData(out, 0, 0);
     }
 
-    const eqImg = new Image();
-    eqImg.crossOrigin = "anonymous";
-    eqImg.onload = () => {
-      const c = document.createElement('canvas'); c.width = EQ_W; c.height = EQ_H;
-      const cx = c.getContext('2d');
-      cx.drawImage(eqImg, 0, 0, EQ_W, EQ_H);
-      eqDayData = cx.getImageData(0, 0, EQ_W, EQ_H).data;
-      renderMercatorBiomeCanvas();
-      if (map.getSource('biome-earth')) {
-        map.getSource('biome-earth').updateImage({
+    function updateBiomeLayerOnMap() {
+      const src = map && map.getSource('biome-earth');
+      if (src) {
+        src.updateImage({
           url: biomeCanvas.toDataURL(),
           coordinates: [[-180, 85.051129], [180, 85.051129], [180, -85.051129], [-180, -85.051129]]
         });
       }
-    };
-    eqImg.src = "https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/textures/planets/earth_day_4096.jpg";
+    }
 
-    // Sample Earth biome greenness/desert at any [lon, lat] in O(1)
     function sampleBiomeAtLatLon(lon, lat) {
       if (!eqDayData) return { greenness: 30, isDesert: false, isSnow: false };
       if (simState.saharaGreen && lat > 14 && lat < 32 && lon > -16 && lon < 36) {
@@ -478,7 +434,7 @@
     }
 
     // =========================================================
-    // 3. BUILD PREHISTORIC MAPLIBRE STYLE (NO ROADS/CITIES + REAL 3D DEM)
+    // 3. INITIALIZE MAPLIBRE (NON-BLOCKING & ULTRA-FAST)
     // =========================================================
     const prehistoricStyle = {
       version: 8,
@@ -491,12 +447,13 @@
           type: "raster-dem",
           tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
           tileSize: 256,
-          maxzoom: 14,
+          minzoom: 0,
+          maxzoom: 15,
           encoding: "terrarium"
         },
         "biome-earth": {
           type: "image",
-          url: biomeCanvas.toDataURL(),
+          url: TINY_PLACEHOLDER,
           coordinates: [[-180, 85.051129], [180, 85.051129], [180, -85.051129], [-180, -85.051129]]
         }
       },
@@ -507,7 +464,6 @@
           paint: { "background-color": "#4f853e" }
         },
         {
-          // Global NASA biome coloring (Sahara, Amazon, Congo, Siberia)
           id: "biome-raster",
           type: "raster",
           source: "biome-earth",
@@ -517,12 +473,11 @@
           }
         },
         {
-          // OpenStreetMap / Natural Earth vector forests, grass, sand, glaciers
           id: "landcover-grass",
           type: "fill",
           source: "openmaptiles",
           "source-layer": "landcover",
-          filter: ["in", ["get", "class"], ["literal", ["grass", "farmland", "wetland"]]],
+          filter: ["match", ["get", "class"], ["grass", "farmland", "wetland"], true, false],
           paint: { "fill-color": "#4fa346", "fill-opacity": 0.45 }
         },
         {
@@ -550,10 +505,10 @@
           paint: { "fill-color": "#eef6ff", "fill-opacity": 0.9 }
         },
         {
-          // Real Elevation Coloring (only kicks in above 1100m so low deserts stay sandy!)
           id: "elevation-relief",
           type: "color-relief",
           source: "terrarium",
+          minzoom: 4,
           paint: {
             "color-relief-color": [
               "interpolate", ["linear"], ["elevation"],
@@ -567,19 +522,17 @@
           }
         },
         {
-          // Multidirectional 3D Mountain Hillshade
           id: "terrain-hillshade",
           type: "hillshade",
           source: "terrarium",
+          minzoom: 4,
           paint: {
-            "hillshade-method": "multidirectional",
-            "hillshade-exaggeration": 0.6,
+            "hillshade-exaggeration": 0.55,
             "hillshade-shadow-color": "#1a2016",
             "hillshade-highlight-color": "#fff8e7"
           }
         },
         {
-          // Real Vector Oceans, Lakes, and Wide Rivers (covers biome-earth cleanly!)
           id: "water-fill",
           type: "fill",
           source: "openmaptiles",
@@ -601,6 +554,7 @@
       ]
     };
 
+    const statusEl = document.getElementById('load-status');
     const map = new maplibregl.Map({
       container: 'map',
       style: prehistoricStyle,
@@ -608,38 +562,62 @@
       zoom: 1.5,
       maxZoom: 17.5,
       minZoom: 1.2,
+      pixelRatio: PIXEL_RATIO,
       renderWorldCopies: false,
       attributionControl: false
     });
 
-    map.setPixelRatio(PIXEL_RATIO);
+    // Enable terrain as soon as style loads (never wait for every global tile!)
+    map.once('styledata', () => {
+      try {
+        map.setTerrain({ source: 'terrarium', exaggeration: 1.35 });
+      } catch(err) {}
+      mapReady = true;
+      statusEl.innerText = "Earth ready!";
+    });
 
     map.on('load', () => {
-      map.setTerrain({ source: 'terrarium', exaggeration: 1.35 });
       mapReady = true;
-      document.getElementById('start-btn').innerText = "ENTER 300,000 BCE";
+      statusEl.innerText = "All global layers streamed ✓";
     });
 
     map.on('error', (e) => {
-      // Prevent noisy non-fatal tile logs from blocking
+      if (e && e.error) {
+        console.warn("MapLibre notice:", e.error.message);
+        if (!mapReady) statusEl.innerText = `Notice: ${e.error.message.slice(0, 60)}`;
+      }
     });
 
-    // Safe Elevation Helper (meters above sea level)
+    // Stream NASA 4K biome image asynchronously in background
+    const eqImg = new Image();
+    eqImg.crossOrigin = "anonymous";
+    eqImg.onload = () => {
+      const c = document.createElement('canvas'); c.width = EQ_W; c.height = EQ_H;
+      const cx = c.getContext('2d');
+      cx.drawImage(eqImg, 0, 0, EQ_W, EQ_H);
+      eqDayData = cx.getImageData(0, 0, EQ_W, EQ_H).data;
+      renderMercatorBiomeCanvas();
+      updateBiomeLayerOnMap();
+    };
+    eqImg.src = "https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/textures/planets/earth_day_4096.jpg";
+
     function getElevMeters(lon, lat) {
       if (!mapReady) return null;
-      const e = map.queryTerrainElevation([lon, lat], { exaggerated: false });
-      return (e === null || e === undefined || isNaN(e)) ? null : e;
+      try {
+        const e = map.queryTerrainElevation([lon, lat], { exaggerated: false });
+        return (e === null || e === undefined || isNaN(e)) ? null : e;
+      } catch(err) { return null; }
     }
 
-    // Check if screen point is over vector water
     function isPointInWater(lon, lat) {
       if (!mapReady) return false;
-      const pt = map.project([lon, lat]);
-      const feats = map.queryRenderedFeatures([pt.x, pt.y], { layers: ['water-fill', 'waterway-rivers'] });
-      return feats.length > 0;
+      try {
+        const pt = map.project([lon, lat]);
+        const feats = map.queryRenderedFeatures([pt.x, pt.y], { layers: ['water-fill', 'waterway-rivers'] });
+        return feats.length > 0;
+      } catch(err) { return false; }
     }
 
-    // Live Elevation Hover Readout
     map.on('mousemove', (e) => {
       if (!mapReady) return;
       const elev = getElevMeters(e.lngLat.lng, e.lngLat.lat);
@@ -795,7 +773,6 @@
     const gazelles = [];
     const smokeParticles = [];
 
-    // Helper: pick valid land destination respecting elevation < 3800m, slope, and water!
     function pickSafeStep(curLon, curLat, homeLon, homeLat, maxDeg) {
       for (let attempt = 0; attempt < 5; attempt++) {
         const ang = Math.random() * Math.PI * 2;
@@ -807,8 +784,8 @@
         const eCur = getElevMeters(curLon, curLat);
         const eNext = getElevMeters(nl, na);
         if (eNext !== null) {
-          if (eNext <= 1 || eNext > 3800) continue; // No ocean, no Mt. Everest!
-          if (eCur !== null && Math.abs(eNext - eCur) > 180) continue; // Avoid sheer cliffs!
+          if (eNext <= 1 || eNext > 3800) continue;
+          if (eCur !== null && Math.abs(eNext - eCur) > 180) continue;
         }
         return { lon: nl, lat: na };
       }
@@ -842,14 +819,12 @@
 
     function populateHistoricalWildlife() {
       wildAnimals.length = 0;
-
       SPECIES_ZONES.bears.forEach(z => {
         for (let i = 0; i < 6; i++) {
           const lon = z.lon + (Math.random() - 0.5) * 0.02, lat = z.lat + (Math.random() - 0.5) * 0.02;
           wildAnimals.push({ type: "bears", variant: z.variant, lon, lat, homeLon: z.lon, homeLat: z.lat, tLon: lon, tLat: lat, dir: 1, wait: Math.random()*100 });
         }
       });
-
       SPECIES_ZONES.horses.forEach(z => {
         if (z.region === "Americas" && !simState.horsesInAmericas) return;
         for (let i = 0; i < 8; i++) {
@@ -857,7 +832,6 @@
           wildAnimals.push({ type: "horses", lon, lat, homeLon: z.lon, homeLat: z.lat, tLon: lon, tLat: lat, dir: 1, wait: Math.random()*100 });
         }
       });
-
       if (simState.mammothsAlive) {
         SPECIES_ZONES.mammoths.forEach(z => {
           for (let i = 0; i < 5; i++) {
@@ -866,42 +840,31 @@
           }
         });
       }
-
       SPECIES_ZONES.lions.forEach(z => {
         for (let i = 0; i < 5; i++) {
           const lon = z.lon + (Math.random() - 0.5) * 0.02, lat = z.lat + (Math.random() - 0.5) * 0.02;
           wildAnimals.push({ type: "lions", lon, lat, homeLon: z.lon, homeLat: z.lat, tLon: lon, tLat: lat, dir: 1, wait: Math.random()*100 });
         }
       });
-
       updateTrackerCounts();
     }
 
     // =========================================================
-    // 6. "SHOW ON MAP:" HTML PINS SYNCED VIA map.project()
+    // 6. "SHOW ON MAP:" HTML PINS
     // =========================================================
     let currentPinsData = [];
-
     function rebuildPinData() {
       currentPinsData = [];
-      if (simState.trackers.humans) {
-        simState.tribes.forEach(t => currentPinsData.push({ lat: t.lat, lon: t.lon, color: '#38bdf8', label: `👤 ${t.name}`, zoom: 14.6 }));
-      }
-      if (simState.trackers.bears) {
-        SPECIES_ZONES.bears.forEach(z => currentPinsData.push({ lat: z.lat, lon: z.lon, color: '#d97706', label: `🐻 ${z.name}`, zoom: 13.8 }));
-      }
+      if (simState.trackers.humans) simState.tribes.forEach(t => currentPinsData.push({ lat: t.lat, lon: t.lon, color: '#38bdf8', label: `👤 ${t.name}`, zoom: 14.6 }));
+      if (simState.trackers.bears) SPECIES_ZONES.bears.forEach(z => currentPinsData.push({ lat: z.lat, lon: z.lon, color: '#d97706', label: `🐻 ${z.name}`, zoom: 13.8 }));
       if (simState.trackers.horses) {
         SPECIES_ZONES.horses.forEach(z => {
           if (z.region === "Americas" && !simState.horsesInAmericas) return;
           currentPinsData.push({ lat: z.lat, lon: z.lon, color: '#22c55e', label: `🐎 ${z.name}`, zoom: 13.8 });
         });
       }
-      if (simState.trackers.mammoths && simState.mammothsAlive) {
-        SPECIES_ZONES.mammoths.forEach(z => currentPinsData.push({ lat: z.lat, lon: z.lon, color: '#a855f7', label: `🦣 ${z.name}`, zoom: 13.8 }));
-      }
-      if (simState.trackers.lions) {
-        SPECIES_ZONES.lions.forEach(z => currentPinsData.push({ lat: z.lat, lon: z.lon, color: '#fbbf24', label: `🦁 ${z.name}`, zoom: 13.8 }));
-      }
+      if (simState.trackers.mammoths && simState.mammothsAlive) SPECIES_ZONES.mammoths.forEach(z => currentPinsData.push({ lat: z.lat, lon: z.lon, color: '#a855f7', label: `🦣 ${z.name}`, zoom: 13.8 }));
+      if (simState.trackers.lions) SPECIES_ZONES.lions.forEach(z => currentPinsData.push({ lat: z.lat, lon: z.lon, color: '#fbbf24', label: `🦁 ${z.name}`, zoom: 13.8 }));
 
       const container = document.getElementById('pins-layer');
       container.innerHTML = '';
@@ -939,7 +902,7 @@
     rebuildPinData();
 
     // =========================================================
-    // 7. VISUAL INTERACTIVE TASKS & CHRONOS LEAP
+    // 7. VISUAL TASKS, CHRONOS LEAP & AI INTERVENE
     // =========================================================
     function showToast(msg, duration = 5000) {
       const t = document.getElementById('chronicle-toast');
@@ -1031,10 +994,7 @@
       function addEraTribe(name, lat, lon) {
         const t = {
           name, lat, lon, fireLit: true,
-          hutsCoords: [
-            { lon: lon - 0.0025, lat: lat + 0.0018 },
-            { lon: lon + 0.0028, lat: lat + 0.0015 }
-          ]
+          hutsCoords: [{ lon: lon - 0.0025, lat: lat + 0.0018 }, { lon: lon + 0.0028, lat: lat + 0.0015 }]
         };
         simState.tribes.push(t);
         spawnTribeOnMap(t);
@@ -1068,20 +1028,12 @@
       rebuildPinData();
     });
 
-    // =========================================================
-    // 8. REAL AI INTERVENTION BACKEND CONNECTION (/api/turn)
-    // =========================================================
-    document.getElementById('btn-intervene').onclick = () => {
-      document.getElementById('intervention-modal').style.display = 'flex';
-    };
-    document.getElementById('close-intervene').onclick = () => {
-      document.getElementById('intervention-modal').style.display = 'none';
-    };
+    document.getElementById('btn-intervene').onclick = () => { document.getElementById('intervention-modal').style.display = 'flex'; };
+    document.getElementById('close-intervene').onclick = () => { document.getElementById('intervention-modal').style.display = 'none'; };
     document.getElementById('submit-intervene').onclick = async () => {
       const inputEl = document.getElementById('intervene-input');
       const val = inputEl.value.trim();
       if (!val) return;
-
       const submitBtn = document.getElementById('submit-intervene');
       submitBtn.innerText = "Simulating...";
       submitBtn.disabled = true;
@@ -1106,10 +1058,7 @@
         const text = await res.text();
         let data;
         try { data = JSON.parse(text); }
-        catch (e) {
-          showToast(`⚠️ Server Error (${res.status}): Make sure <code>api/turn.js</code> is pushed.`, 7000);
-          return;
-        }
+        catch (e) { showToast(`⚠️ Server Error (${res.status}): Make sure <code>api/turn.js</code> is pushed.`, 7000); return; }
 
         if (data.error) { showToast(`⚠️ ${data.error}`, 7000); return; }
 
@@ -1120,12 +1069,7 @@
             if (cmd.type === "green_sahara") {
               simState.saharaGreen = true;
               renderMercatorBiomeCanvas();
-              if (map.getSource('biome-earth')) {
-                map.getSource('biome-earth').updateImage({
-                  url: biomeCanvas.toDataURL(),
-                  coordinates: [[-180, 85.051129], [180, 85.051129], [180, -85.051129], [-180, -85.051129]]
-                });
-              }
+              updateBiomeLayerOnMap();
             }
             if (cmd.type === "spawn_tribe" && cmd.lat != null && cmd.lon != null) {
               const t = {
@@ -1139,7 +1083,6 @@
           populateHistoricalWildlife();
           rebuildPinData();
         }
-
         showToast(`✨ <strong>Chronicle:</strong> ${data.narrative || "Timeline altered."}`, 7000);
       } catch (err) {
         showToast(`⚠️ Network error: ${err.message}`, 6000);
@@ -1152,19 +1095,18 @@
     };
 
     // =========================================================
-    // 9. UI BUTTONS & SPEED CONTROLS
+    // 8. UI BUTTONS & SPEED CONTROLS
     // =========================================================
     document.getElementById('start-btn').addEventListener('click', () => {
-      if (!mapReady) return;
       gameStarted = true;
       const m = document.getElementById('intro-modal');
       m.style.opacity = '0';
       setTimeout(() => m.style.display = 'none', 600);
-      map.flyTo({ center: [simState.tribes[0].lon, simState.tribes[0].lat], zoom: 14.6, duration: 3000 });
+      map.flyTo({ center: [simState.tribes[0].lon, simState.tribes[0].lat], zoom: 14.6, duration: 2800 });
     });
 
-    document.getElementById('btn-orbit').onclick = () => map.flyTo({ center: [20, 14], zoom: 1.6, pitch: 0, duration: 1800 });
-    document.getElementById('btn-camp').onclick = () => map.flyTo({ center: [simState.tribes[0].lon, simState.tribes[0].lat], zoom: 14.6, duration: 2000 });
+    document.getElementById('btn-orbit').onclick = () => map.flyTo({ center: [20, 14], zoom: 1.6, pitch: 0, duration: 1600 });
+    document.getElementById('btn-camp').onclick = () => map.flyTo({ center: [simState.tribes[0].lon, simState.tribes[0].lat], zoom: 14.6, duration: 1800 });
 
     document.getElementById('btn-pixel').onclick = function() {
       pixelMode = !pixelMode;
@@ -1182,7 +1124,7 @@
     [0, 1, 5, 20].forEach(k => document.getElementById(`sp-${k}`).onclick = () => setSpeed(k));
 
     // =========================================================
-    // 10. 2D SPRITE RENDERER & 5-MINUTE DAY/NIGHT LOOP
+    // 9. 2D SPRITE RENDERER & 5-MINUTE DAY/NIGHT LOOP
     // =========================================================
     const sprCanvas = document.getElementById('sprite-canvas');
     const sCtx = sprCanvas.getContext('2d');
@@ -1208,7 +1150,6 @@
       lastTime = now;
       frameCount++;
 
-      // 5-Minute Real-Time Day/Night Cycle
       if (gameStarted && timeSpeed > 0) {
         simState.dayTime = (simState.dayTime + (dt * timeSpeed) / 300.0) % 1.0;
         if (frameCount % 300 === 0 && !simState.isCE && simState.year > 1000) {
@@ -1217,7 +1158,6 @@
         }
       }
 
-      // Clock & Lighting Calculations
       const hours24 = Math.floor(simState.dayTime * 24);
       const mins = Math.floor((simState.dayTime * 24 - hours24) * 60);
       const h12 = (hours24 % 12) || 12;
@@ -1230,8 +1170,7 @@
         nightAlpha = 0.36 * (1 - (simState.dayTime - 0.22) / 0.10);
         tint = "120, 45, 18";
       } else if (simState.dayTime >= 0.32 && simState.dayTime < 0.70) {
-        period = "Daylight"; icon = "☀️";
-        nightAlpha = 0;
+        period = "Daylight"; icon = "☀️"; nightAlpha = 0;
       } else if (simState.dayTime >= 0.70 && simState.dayTime < 0.80) {
         period = "Dusk"; icon = "🌇";
         nightAlpha = 0.42 * ((simState.dayTime - 0.70) / 0.10);
@@ -1259,11 +1198,9 @@
         });
       }
 
-      // Clear Sprite Canvas
       sCtx.clearRect(0, 0, sprCanvas.width, sprCanvas.height);
       sCtx.imageSmoothingEnabled = false;
 
-      // Draw Night Darkness + Cut Out Warm Campfire Glow Holes!
       if (nightAlpha > 0.01) {
         sCtx.fillStyle = `rgba(${tint}, ${nightAlpha})`;
         sCtx.fillRect(0, 0, sprCanvas.width, sprCanvas.height);
@@ -1285,7 +1222,6 @@
           });
           sCtx.restore();
 
-          // Warm orange firelight tint
           simState.tribes.forEach(tr => {
             if (!tr.fireLit) return;
             const pt = map.project([tr.lon, tr.lat]);
@@ -1300,14 +1236,12 @@
         }
       }
 
-      // Ground-Level 8-Bit Entities & Foreground Trees (Fade in smoothly z12.2 -> z13.8)
       const detailAlpha = Math.max(0, Math.min(1, (zoom - 12.0) / 1.6));
-      if (detailAlpha > 0.02 && mapReady) {
+      if (detailAlpha > 0.02) {
         sCtx.save();
         sCtx.globalAlpha = detailAlpha;
         const sprScale = Math.max(0.9, Math.min(2.8, (zoom - 11.5) * 0.52));
 
-        // 1. Deterministic Foreground Biome Trees inside current Viewport (NEVER in oceans or Mt. Everest!)
         const bounds = map.getBounds();
         const STEP = 0.0022;
         const minLon = Math.floor(bounds.getWest() / STEP) * STEP;
@@ -1316,14 +1250,13 @@
         const maxLat = Math.ceil(bounds.getNorth() / STEP) * STEP;
 
         let drawnTrees = 0;
-        for (let la = minLat; la <= maxLat && drawnTrees < 350; la += STEP) {
-          for (let lo = minLon; lo <= maxLon && drawnTrees < 350; lo += STEP) {
+        for (let la = minLat; la <= maxLat && drawnTrees < 320; la += STEP) {
+          for (let lo = minLon; lo <= maxLon && drawnTrees < 320; lo += STEP) {
             const cx = Math.round(lo / STEP), cy = Math.round(la / STEP);
             const h = hash2(cx, cy);
             const tLon = lo + (h - 0.5) * STEP * 0.8;
             const tLat = la + (hash2(cx + 11, cy + 7) - 0.5) * STEP * 0.8;
 
-            // Keep tribe clearings open
             let nearCamp = false;
             for (const tr of simState.tribes) {
               if (Math.hypot(tLon - tr.lon, tLat - tr.lat) < 0.0045) { nearCamp = true; break; }
@@ -1334,7 +1267,6 @@
             if (bio.isDesert || bio.isSnow || bio.greenness < 8) continue;
             if (h > (bio.greenness > 34 ? 0.65 : 0.30)) continue;
 
-            // Skip water & peaks > 3600m!
             if (isPointInWater(tLon, tLat)) continue;
             const elev = getElevMeters(tLon, tLat);
             if (elev !== null && (elev <= 1 || elev > 3600)) continue;
@@ -1351,17 +1283,13 @@
           }
         }
 
-        // 2. Camps, Huts, Drying Rack & Hearth Fire
         simState.tribes.forEach(tr => {
           const cpt = map.project([tr.lon, tr.lat]);
-
-          // Dirt clearing oval
           sCtx.fillStyle = 'rgba(130, 92, 54, 0.55)';
           sCtx.beginPath();
           sCtx.ellipse(cpt.x, cpt.y, 45 * sprScale, 32 * sprScale, 0, 0, Math.PI * 2);
           sCtx.fill();
 
-          // Huts
           if (tr.hutsCoords) {
             tr.hutsCoords.forEach(hc => {
               const hpt = map.project([hc.lon, hc.lat]);
@@ -1370,13 +1298,11 @@
             });
           }
 
-          // Drying Rack (after 3 hunts)
           if (simState.huntsDone >= simState.huntsNeeded) {
             const rw = sprRack.width * sprScale, rh = sprRack.height * sprScale;
             sCtx.drawImage(sprRack, Math.round(cpt.x + 18 * sprScale), Math.round(cpt.y + 8 * sprScale - rh), Math.round(rw), Math.round(rh));
           }
 
-          // Stone Hearth & Animated Fire
           sCtx.fillStyle = '#475569';
           sCtx.beginPath();
           sCtx.arc(cpt.x, cpt.y, 5 * sprScale, 0, Math.PI * 2);
@@ -1394,11 +1320,9 @@
           }
         });
 
-        // Smoke Particles
         if (simState.fireLit) {
           smokeParticles.forEach(p => {
-            p.life -= 0.012;
-            p.dy -= 0.35 * sprScale;
+            p.life -= 0.012; p.dy -= 0.35 * sprScale;
             p.dx += Math.sin(now * 0.004 + p.life * 6) * 0.15;
             if (p.life <= 0) { p.life = 1.0; p.dx = (Math.random() - 0.5) * 4; p.dy = -4 * sprScale; }
             const pt = map.project([p.tribe.lon, p.tribe.lat]);
@@ -1408,7 +1332,6 @@
           });
         }
 
-        // 3. Draw & Update Elevation-Aware Humans & Animals
         const spd = timeSpeed === 0 ? 0 : Math.min(0.00018, 0.00003 * Math.sqrt(timeSpeed));
 
         function drawSpriteAgent(img, lon, lat, dir, scaleMult = 1.0) {
@@ -1416,13 +1339,10 @@
           if (pt.x < -50 || pt.x > sprCanvas.width + 50 || pt.y < -50 || pt.y > sprCanvas.height + 50) return;
           const w = img.width * sprScale * scaleMult;
           const h = img.height * sprScale * scaleMult;
-
-          // Soft shadow
           sCtx.fillStyle = 'rgba(0,0,0,0.35)';
           sCtx.beginPath();
           sCtx.ellipse(pt.x, pt.y, w * 0.35, h * 0.12, 0, 0, Math.PI * 2);
           sCtx.fill();
-
           sCtx.save();
           sCtx.translate(Math.round(pt.x), Math.round(pt.y));
           if (dir < 0) sCtx.scale(-1, 1);
@@ -1430,7 +1350,6 @@
           sCtx.restore();
         }
 
-        // Humans
         humanAgents.forEach(h => {
           if (spd > 0) {
             if (h.huntingTarget) {
@@ -1439,19 +1358,14 @@
                 const dx = h.huntingTarget.lon - h.lon, dy = h.huntingTarget.lat - h.lat;
                 const d = Math.hypot(dx, dy);
                 if (d < 0.00035) {
-                  h.huntingTarget.alive = false;
-                  h.huntingTarget = null;
-                  completeSingleHunt();
+                  h.huntingTarget.alive = false; h.huntingTarget = null; completeSingleHunt();
                 } else {
-                  h.lon += (dx / d) * (spd * 2.0);
-                  h.lat += (dy / d) * (spd * 2.0);
-                  h.dir = dx < 0 ? -1 : 1;
-                  h.anim += 0.3;
+                  h.lon += (dx / d) * (spd * 2.0); h.lat += (dy / d) * (spd * 2.0);
+                  h.dir = dx < 0 ? -1 : 1; h.anim += 0.3;
                 }
               }
-            } else if (h.wait > 0) {
-              h.wait--;
-            } else {
+            } else if (h.wait > 0) { h.wait--; }
+            else {
               const dx = h.tLon - h.lon, dy = h.tLat - h.lat, d = Math.hypot(dx, dy);
               if (d < 0.00015) {
                 h.wait = isNight ? (100 + Math.random() * 150) : (40 + Math.random() * 90);
@@ -1460,8 +1374,7 @@
                 h.tLon = next.lon; h.tLat = next.lat;
               } else {
                 h.lon += (dx / d) * spd; h.lat += (dy / d) * spd;
-                h.dir = dx < 0 ? -1 : 1;
-                h.anim += 0.22;
+                h.dir = dx < 0 ? -1 : 1; h.anim += 0.22;
               }
             }
           }
@@ -1469,7 +1382,6 @@
           drawSpriteAgent(img, h.lon, h.lat, h.dir, 0.9);
         });
 
-        // Gazelles & Historical Wildlife
         const aniSpd = spd * 0.75;
         gazelles.forEach(g => {
           if (!g.alive) return;
