@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chronos: Living 8-Bit Earth</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.2/pixi.min.js"></script>
+  <title>Chronos: Prehistoric 8-Bit Earth</title>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" />
+  <script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
   <style>
     :root {
       --bg: #020617;
-      --panel: rgba(10, 15, 28, 0.92);
+      --panel: rgba(10, 15, 28, 0.90);
       --border: #1e293b;
       --accent: #38bdf8;
       --gold: #fbbf24;
@@ -26,9 +27,25 @@
       height: 100vh;
     }
 
-    #canvas-container { position: fixed; inset: 0; z-index: 1; }
-    #canvas-container canvas { width: 100%; height: 100%; display: block; cursor: grab; }
-    #canvas-container canvas:active { cursor: grabbing; }
+    #map {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+    }
+    /* Crisp 8-bit pixelation on MapLibre's WebGL canvas */
+    #map.pixel-mode .maplibregl-canvas {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left { display: none !important; }
+
+    /* Overlay canvas for crisp animated 8-bit humans, animals, fire & night glow */
+    #sprite-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      pointer-events: none;
+    }
 
     /* Top HUD */
     .top-hud {
@@ -53,12 +70,13 @@
     .era-badge { font-size: 0.68rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent); font-weight: 800; }
     .year-display { font-size: 1.35rem; font-weight: 800; font-family: monospace; margin-top: 2px; }
     .clock-row { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: #cbd5e1; margin-top: 4px; }
-    .nav-btns { display: flex; gap: 6px; margin-top: 8px; justify-content: flex-end; }
+    .nav-btns { display: flex; gap: 6px; margin-top: 8px; justify-content: flex-end; flex-wrap: wrap; }
     .btn-mini {
       background: #1e293b; color: #cbd5e1; border: 1px solid #334155;
       padding: 5px 10px; border-radius: 6px; font-size: 0.74rem; font-weight: 600; cursor: pointer;
     }
     .btn-mini:hover { border-color: var(--accent); color: #fff; }
+    .btn-mini.active { background: var(--accent); color: #020617; border-color: var(--accent); }
 
     /* Left "SHOW ON MAP:" Tracker Bar */
     .show-bar {
@@ -69,7 +87,7 @@
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 12px;
-      width: 215px;
+      width: 220px;
       z-index: 50;
       display: flex;
       flex-direction: column;
@@ -86,6 +104,43 @@
     .track-toggle:hover { border-color: var(--accent); }
     .track-toggle.active { border-color: var(--accent); background: rgba(56, 189, 248, 0.12); color: #fff; font-weight: 700; }
     .track-note { font-size: 0.68rem; color: #94a3b8; padding: 2px 4px; line-height: 1.35; }
+
+    /* Pin Markers Overlay */
+    #pins-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 25;
+      pointer-events: none;
+    }
+    .map-pin {
+      position: absolute;
+      transform: translate(-50%, -100%);
+      pointer-events: auto;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: opacity 0.25s;
+    }
+    .pin-label {
+      background: rgba(2, 6, 23, 0.88);
+      border: 1px solid rgba(255,255,255,0.25);
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      white-space: nowrap;
+      margin-bottom: 3px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+    }
+    .pin-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      box-shadow: 0 0 10px rgba(0,0,0,0.8);
+    }
 
     /* Toast */
     #chronicle-toast {
@@ -145,13 +200,13 @@
     /* Modals */
     #intro-modal {
       position: fixed; inset: 0;
-      background: rgba(2, 6, 23, 0.88);
+      background: rgba(2, 6, 23, 0.86);
       backdrop-filter: blur(8px);
       display: flex; flex-direction: column; justify-content: center; align-items: center;
       z-index: 9999; text-align: center; padding: 20px; transition: opacity 0.6s ease;
     }
     #intro-modal h1 { font-size: 3.5rem; letter-spacing: 5px; margin-bottom: 10px; text-shadow: 0 0 30px rgba(56, 189, 248, 0.5); }
-    #intro-modal p { color: #94a3b8; max-width: 520px; line-height: 1.6; margin-bottom: 24px; font-size: 1rem; }
+    #intro-modal p { color: #94a3b8; max-width: 540px; line-height: 1.6; margin-bottom: 24px; font-size: 1rem; }
     .btn-start {
       background: var(--accent); color: #020617; border: none;
       padding: 14px 36px; font-size: 1.05rem; font-weight: 800; border-radius: 8px;
@@ -176,13 +231,15 @@
 </head>
 <body>
 
-  <div id="canvas-container"></div>
+  <div id="map" class="pixel-mode"></div>
+  <canvas id="sprite-canvas"></canvas>
+  <div id="pins-layer"></div>
 
   <!-- Intro -->
   <div id="intro-modal">
     <h1>CHRONOS</h1>
-    <p>An 8-bit subdividing Earth simulation. Zoom from 4K orbital geography down into accurate biomes, dense forests, arid deserts, and a 5-minute day/night cycle starting in 300,000 BCE.</p>
-    <button class="btn-start" id="start-btn">Loading 4K Earth Data...</button>
+    <p>Powered by real Earth topography, global 3D mountain elevation, and vector rivers rendered as crisp 8-bit pixel art. Zero roads, zero cities—begin in 300,000 BCE.</p>
+    <button class="btn-start" id="start-btn">Loading Prehistoric Earth...</button>
   </div>
 
   <!-- Top HUD -->
@@ -198,8 +255,11 @@
 
     <div class="hud-card" style="text-align: right;">
       <div style="font-size: 0.75rem; color: #94a3b8;">GLOBAL HUMANS: <strong style="color:#fff;" id="pop-label">1,500</strong></div>
-      <div style="font-size: 0.74rem; color: var(--gold); margin-top: 2px;">Zoom: <span id="zoom-text">1.0x</span> • <span id="lod-text">LOD 0</span></div>
+      <div style="font-size: 0.74rem; color: var(--gold); margin-top: 2px;">
+        Zoom: <span id="zoom-text">1.5</span> • <span id="elev-text">Elev: -- m</span>
+      </div>
       <div class="nav-btns">
+        <button class="btn-mini active" id="btn-pixel">👾 8-Bit: ON</button>
         <button class="btn-mini" id="btn-orbit">🌍 Orbit</button>
         <button class="btn-mini" id="btn-camp">🔥 Rift Valley</button>
       </div>
@@ -224,7 +284,7 @@
     <div class="track-toggle" id="tog-lions" onclick="toggleTracker('lions')">
       <span>🦁 Lions</span><span id="cnt-lions">3</span>
     </div>
-    <div class="track-note" id="tracker-note">Click any glowing map pin to fly straight there.</div>
+    <div class="track-note" id="tracker-note">Click any map pin to fly straight there. Right-drag to tilt 3D mountains.</div>
   </div>
 
   <!-- Chronicle Toast -->
@@ -232,7 +292,7 @@
 
   <!-- Bottom Interactive Bar -->
   <div class="bottom-bar">
-    <div class="tasks-group" id="tasks-container">
+    <div class="tasks-group">
       <div class="task-card" id="task-fire" onclick="actionSparkFire()">
         <span>🔥</span> <span id="task-fire-txt">Ignite Campfire</span>
       </div>
@@ -269,52 +329,13 @@
 
   <script>
     // =========================================================
-    // 1. INITIALIZE PIXI ENGINE & COORDINATES (FULL 4K EARTH)
+    // 1. HISTORICAL STATE, TRIBES & ANIMAL BIOGEOGRAPHY
     // =========================================================
     let gameStarted = false;
-    let texturesReady = false;
-    const MAP_WIDTH = 4096;
-    const MAP_HEIGHT = 2048;
-    const MAX_ZOOM = 500.0;
-    const TILE_PX = 128;
+    let mapReady = false;
+    let pixelMode = true;
+    const PIXEL_RATIO = 0.34; // Uniform crisp 8-bit pixels at every zoom!
 
-    function latLonToWorld(lat, lon) {
-      return {
-        x: ((lon + 180) / 360) * MAP_WIDTH,
-        y: ((90 - lat) / 180) * MAP_HEIGHT
-      };
-    }
-
-    const app = new PIXI.Application({
-      resizeTo: window,
-      backgroundColor: 0x020617,
-      antialias: false,
-      resolution: window.devicePixelRatio || 1,
-      autoDensity: true
-    });
-    const canvasEl = app.view;
-    document.getElementById('canvas-container').appendChild(canvasEl);
-
-    const world = new PIXI.Container();
-    app.stage.addChild(world);
-
-    const quadLayer = new PIXI.Container();
-    quadLayer.sortableChildren = true;
-    const propsLayer = new PIXI.Container();
-    const entitiesLayer = new PIXI.Container();
-    const treesLayer = new PIXI.Container();
-    const campLayer = new PIXI.Container();
-    const nightWorldGlowLayer = new PIXI.Container();
-    const pinLayer = new PIXI.Container();
-
-    world.addChild(quadLayer, propsLayer, entitiesLayer, treesLayer, campLayer, nightWorldGlowLayer, pinLayer);
-
-    const dayNightOverlay = new PIXI.Graphics();
-    app.stage.addChild(dayNightOverlay);
-
-    // =========================================================
-    // 2. HISTORICAL STATE, TRIBES & ANIMAL BIOGEOGRAPHY
-    // =========================================================
     const ERAS = [
       { year: 300000, label: "300,000 BCE", name: "PALEOLITHIC DAWN", pop: "1,500" },
       { year: 70000,  label: "70,000 BCE",  name: "OUT OF AFRICA MIGRATION", pop: "48,000" },
@@ -327,7 +348,7 @@
       eraIndex: 0,
       year: 300000,
       isCE: false,
-      dayTime: 0.35,
+      dayTime: 0.36,
       fireLit: false,
       huntsDone: 0,
       huntsNeeded: 3,
@@ -336,7 +357,8 @@
       mammothsAlive: true,
       saharaGreen: false,
       tribes: [
-        { name: "Rift Valley Clan", lat: -2.8, lon: 35.8, fireLit: false, huts: 0 }
+        // East African Rift Valley (Serengeti/Ngorongoro plateau near Olduvai)
+        { name: "Rift Valley Clan", lat: -2.99, lon: 35.35, fireLit: false, huts: 0 }
       ],
       trackers: {
         humans: true,
@@ -349,389 +371,289 @@
 
     const SPECIES_ZONES = {
       bears: [
-        { name: "Alaskan Grizzlies", lat: 63, lon: -150, variant: "brown" },
-        { name: "Rocky Mountain Bears", lat: 51, lon: -115, variant: "brown" },
-        { name: "Siberian Brown Bears", lat: 60, lon: 95, variant: "brown" },
-        { name: "Arctic Polar Bears", lat: 74, lon: -95, variant: "polar" }
+        { name: "Alaskan Grizzlies", lat: 62.5, lon: -149.8, variant: "brown" },
+        { name: "Rocky Mountain Bears", lat: 48.6, lon: -113.8, variant: "brown" },
+        { name: "Siberian Brown Bears", lat: 59.5, lon: 94.0, variant: "brown" },
+        { name: "Arctic Polar Bears", lat: 74.2, lon: -94.5, variant: "polar" }
       ],
       horses: [
-        { name: "Eurasian Steppe Mustangs", lat: 49, lon: 72, region: "Eurasia" },
-        { name: "Mongolian Wild Horses", lat: 46, lon: 103, region: "Eurasia" },
-        { name: "Pontic Steppe Herds", lat: 47, lon: 36, region: "Eurasia" },
-        { name: "Great Plains Horses", lat: 41, lon: -102, region: "Americas" },
-        { name: "Argentine Pampas Herds", lat: -35, lon: -62, region: "Americas" }
+        { name: "Eurasian Steppe Mustangs", lat: 49.0, lon: 72.0, region: "Eurasia" },
+        { name: "Mongolian Wild Horses", lat: 46.2, lon: 103.5, region: "Eurasia" },
+        { name: "Pontic Steppe Herds", lat: 47.2, lon: 36.5, region: "Eurasia" },
+        { name: "Great Plains Horses", lat: 41.2, lon: -102.2, region: "Americas" },
+        { name: "Argentine Pampas Herds", lat: -35.5, lon: -62.0, region: "Americas" }
       ],
       mammoths: [
-        { name: "Siberian Woolly Mammoths", lat: 67, lon: 115 },
-        { name: "Yukon Mammoths", lat: 65, lon: -140 },
-        { name: "Northern Steppe Mammoths", lat: 57, lon: 42 }
+        { name: "Siberian Woolly Mammoths", lat: 67.2, lon: 115.0 },
+        { name: "Yukon Mammoths", lat: 64.5, lon: -139.0 },
+        { name: "Northern Steppe Mammoths", lat: 57.5, lon: 42.0 }
       ],
       lions: [
-        { name: "Serengeti Pride", lat: -2.5, lon: 34.8 },
-        { name: "Sahel Lions", lat: 12, lon: 15 },
-        { name: "Asiatic Lions (India)", lat: 21.5, lon: 71 }
+        { name: "Serengeti Pride", lat: -2.4, lon: 34.8 },
+        { name: "Sahel Lions", lat: 11.8, lon: 15.2 },
+        { name: "Asiatic Lions (India)", lat: 21.1, lon: 70.8 }
       ]
     };
 
     // =========================================================
-    // 3. LOAD FULL 4096x2048 EARTH DAYMAP + 2048x1024 WATER MASK
+    // 2. REPROJECT 4K NASA BIOMES TO WEB MERCATOR CANVAS FOR MAPLIBRE
     // =========================================================
-    const DAY_W = 4096, DAY_H = 2048;
-    const WAT_W = 2048, WAT_H = 1024;
-    let dayData = null;
-    let waterData = null;
+    const biomeCanvas = document.createElement('canvas');
+    biomeCanvas.width = 1024;
+    biomeCanvas.height = 1024;
+    const bCtx = biomeCanvas.getContext('2d');
+    bCtx.fillStyle = '#4e8a42';
+    bCtx.fillRect(0, 0, 1024, 1024);
 
-    const dayUrl = "https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/textures/planets/earth_day_4096.jpg";
-    const waterUrl = "https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/textures/planets/earth_specular_2048.jpg";
+    let eqDayData = null;
+    const EQ_W = 2048, EQ_H = 1024;
 
-    let imgD = new Image(); imgD.crossOrigin = "anonymous";
-    let imgW = new Image(); imgW.crossOrigin = "anonymous";
-    let loadedD = false, loadedW = false;
+    function renderMercatorBiomeCanvas() {
+      if (!eqDayData) return;
+      const W = 1024, H = 1024;
+      const out = bCtx.createImageData(W, H);
+      const dst = out.data;
 
-    function initEarthData() {
-      if (!loadedD || !loadedW) return;
+      for (let y = 0; y < H; y++) {
+        // Inverse Web Mercator -> Equirectangular latitude
+        const yMerc = 1.0 - 2.0 * ((y + 0.5) / H);
+        const lat = (2.0 * Math.atan(Math.exp(Math.PI * yMerc)) - Math.PI / 2.0) * (180.0 / Math.PI);
+        const sy = Math.min(EQ_H - 1, Math.max(0, Math.floor(((90.0 - lat) / 180.0) * EQ_H)));
 
-      const cD = document.createElement('canvas'); cD.width = DAY_W; cD.height = DAY_H;
-      const ctxD = cD.getContext('2d');
-      ctxD.drawImage(imgD, 0, 0, DAY_W, DAY_H);
-      dayData = ctxD.getImageData(0, 0, DAY_W, DAY_H).data;
+        for (let x = 0; x < W; x++) {
+          const sx = Math.min(EQ_W - 1, Math.floor((x / W) * EQ_W));
+          const si = (sy * EQ_W + sx) * 4;
+          const di = (y * W + x) * 4;
 
-      const cW = document.createElement('canvas'); cW.width = WAT_W; cW.height = WAT_H;
-      const ctxW = cW.getContext('2d');
-      ctxW.drawImage(imgW, 0, 0, WAT_W, WAT_H);
-      waterData = ctxW.getImageData(0, 0, WAT_W, WAT_H).data;
+          let r = eqDayData[si], g = eqDayData[si+1], b = eqDayData[si+2];
+          // Boost vibrancy
+          const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+          r = Math.min(255, Math.max(0, lum + (r - lum) * 1.4));
+          g = Math.min(255, Math.max(0, lum + (g - lum) * 1.45));
+          b = Math.min(255, Math.max(0, lum + (b - lum) * 1.25));
 
-      for (let ty = 0; ty < 4; ty++) {
-        for (let tx = 0; tx < 8; tx++) {
-          getOrCreateTile(0, tx, ty, true);
+          // AI Sahara greening override
+          if (simState.saharaGreen && lat > 14 && lat < 32 && (x / W) * 360 - 180 > -16 && (x / W) * 360 - 180 < 36) {
+            r = 46; g = 148; b = 56;
+          }
+
+          dst[di] = r; dst[di+1] = g; dst[di+2] = b; dst[di+3] = 255;
         }
       }
-
-      texturesReady = true;
-      document.getElementById('start-btn').innerText = "ENTER 300,000 BCE";
+      bCtx.putImageData(out, 0, 0);
     }
 
-    imgD.onload = () => { loadedD = true; initEarthData(); };
-    imgW.onload = () => { loadedW = true; initEarthData(); };
-    imgD.src = dayUrl;
-    imgW.src = waterUrl;
-
-    // =========================================================
-    // 4. SEAMLESS ORGANIC 8-BIT QUADTREE RENDERER (NO SQUARE BOXES!)
-    // =========================================================
-    const tileCache = new Map();
-    const genQueue = [];
-    const queuedKeys = new Set();
-    let frameCounter = 0;
-
-    function hash2(x, y) {
-      let n = Math.sin((x % 512) * 127.1 + (y % 512) * 311.7) * 43758.5453123;
-      return n - Math.floor(n);
-    }
-
-    function smoothNoise(x, y) {
-      const ix = Math.floor(x), iy = Math.floor(y);
-      const fx = x - ix, fy = y - iy;
-      const ux = fx * fx * (3 - 2 * fx);
-      const uy = fy * fy * (3 - 2 * fy);
-      const a = hash2(ix, iy), b = hash2(ix + 1, iy);
-      const c = hash2(ix, iy + 1), d = hash2(ix + 1, iy + 1);
-      return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy;
-    }
-
-    function fbmWorld(x, y, octaves) {
-      let val = 0, amp = 0.5, freq = 1;
-      for (let o = 0; o < octaves; o++) {
-        val += amp * smoothNoise(x * freq, y * freq);
-        freq *= 2.03;
-        amp *= 0.5;
+    const eqImg = new Image();
+    eqImg.crossOrigin = "anonymous";
+    eqImg.onload = () => {
+      const c = document.createElement('canvas'); c.width = EQ_W; c.height = EQ_H;
+      const cx = c.getContext('2d');
+      cx.drawImage(eqImg, 0, 0, EQ_W, EQ_H);
+      eqDayData = cx.getImageData(0, 0, EQ_W, EQ_H).data;
+      renderMercatorBiomeCanvas();
+      if (map.getSource('biome-earth')) {
+        map.getSource('biome-earth').updateImage({
+          url: biomeCanvas.toDataURL(),
+          coordinates: [[-180, 85.051129], [180, 85.051129], [180, -85.051129], [-180, -85.051129]]
+        });
       }
-      return val;
-    }
+    };
+    eqImg.src = "https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/textures/planets/earth_day_4096.jpg";
 
-    function sampleDayBilinear(fx, fy) {
-      const x0 = Math.max(0, Math.min(DAY_W - 1, Math.floor(fx)));
-      const y0 = Math.max(0, Math.min(DAY_H - 1, Math.floor(fy)));
-      const x1 = Math.min(DAY_W - 1, x0 + 1);
-      const y1 = Math.min(DAY_H - 1, y0 + 1);
-      const tx = fx - x0, ty = fy - y0;
-
-      const i00 = (y0 * DAY_W + x0) * 4, i10 = (y0 * DAY_W + x1) * 4;
-      const i01 = (y1 * DAY_W + x0) * 4, i11 = (y1 * DAY_W + x1) * 4;
-
-      const r = (dayData[i00]*(1-tx) + dayData[i10]*tx)*(1-ty) + (dayData[i01]*(1-tx) + dayData[i11]*tx)*ty;
-      const g = (dayData[i00+1]*(1-tx) + dayData[i10+1]*tx)*(1-ty) + (dayData[i01+1]*(1-tx) + dayData[i11+1]*tx)*ty;
-      const b = (dayData[i00+2]*(1-tx) + dayData[i10+2]*tx)*(1-ty) + (dayData[i01+2]*(1-tx) + dayData[i11+2]*tx)*ty;
-      return [r, g, b];
-    }
-
-    function sampleWaterBilinear(fx, fy) {
-      const x0 = Math.max(0, Math.min(WAT_W - 1, Math.floor(fx)));
-      const y0 = Math.max(0, Math.min(WAT_H - 1, Math.floor(fy)));
-      const x1 = Math.min(WAT_W - 1, x0 + 1);
-      const y1 = Math.min(WAT_H - 1, y0 + 1);
-      const tx = fx - x0, ty = fy - y0;
-
-      const w00 = waterData[(y0 * WAT_W + x0) * 4], w10 = waterData[(y0 * WAT_W + x1) * 4];
-      const w01 = waterData[(y1 * WAT_W + x0) * 4], w11 = waterData[(y1 * WAT_W + x1) * 4];
-      return ((w00*(1-tx) + w10*tx)*(1-ty) + (w01*(1-tx) + w11*tx)*ty) / 255.0;
-    }
-
-    // Continuous Earth Climate Metrics at any exact coordinate (wx, wy)
-    function sampleGroundNature(wx, wy) {
-      const [r, g, b] = sampleDayBilinear(wx, wy);
-      let wVal = sampleWaterBilinear(wx * 0.5, wy * 0.5);
-      // Guard: real green forests are NEVER ocean
-      if (g > b + 10 && wVal < 0.78) wVal = 0.0;
-
-      const isSnow = (r > 188 && g > 188 && b > 188);
-      // True desert metric: warm/bright sandy tan where red strongly beats green and blue
+    // Sample Earth biome greenness/desert at any [lon, lat] in O(1)
+    function sampleBiomeAtLatLon(lon, lat) {
+      if (!eqDayData) return { greenness: 30, isDesert: false, isSnow: false };
+      if (simState.saharaGreen && lat > 14 && lat < 32 && lon > -16 && lon < 36) {
+        return { greenness: 55, isDesert: false, isSnow: false };
+      }
+      const sx = Math.min(EQ_W - 1, Math.max(0, Math.floor(((lon + 180) / 360) * EQ_W)));
+      const sy = Math.min(EQ_H - 1, Math.max(0, Math.floor(((90 - lat) / 180) * EQ_H)));
+      const i = (sy * EQ_W + sx) * 4;
+      const r = eqDayData[i], g = eqDayData[i+1], b = eqDayData[i+2];
+      const isSnow = r > 188 && g > 188 && b > 188;
       const sandiness = (r - g) + (r - b) * 0.4;
       const greenness = (g - r * 0.88) + (g - b) * 0.45;
       const isDesert = !isSnow && (sandiness > 24 && r > 125 && greenness < 22);
-
-      return { r, g, b, wVal, isSnow, isDesert, greenness, sandiness };
-    }
-
-    function buildTileSprite(L, tx, ty) {
-      const tileWorldSize = 512 / Math.pow(2, L);
-      const x0 = tx * tileWorldSize;
-      const y0 = ty * tileWorldSize;
-      const step = tileWorldSize / TILE_PX;
-
-      const canvas = document.createElement('canvas');
-      canvas.width = TILE_PX;
-      canvas.height = TILE_PX;
-      const ctx = canvas.getContext('2d');
-      const imgData = ctx.createImageData(TILE_PX, TILE_PX);
-      const pxOut = imgData.data;
-
-      const octaves = Math.min(4, 1 + Math.floor(L / 2));
-      const warpAmp = L >= 2 ? 1.6 : 0; // Organic domain warp breaks up grid boundaries!
-
-      for (let py = 0; py < TILE_PX; py++) {
-        const wy = y0 + (py + 0.5) * step;
-        for (let px = 0; px < TILE_PX; px++) {
-          const wx = x0 + (px + 0.5) * step;
-          const outIdx = (py * TILE_PX + px) * 4;
-
-          // Smooth organic domain warp so biome & coast boundaries curve naturally (ZERO squares!)
-          let sx = wx, sy = wy;
-          if (warpAmp > 0) {
-            sx += (fbmWorld(wx * 0.25 + 4.1, wy * 0.25 + 1.7, octaves) - 0.5) * warpAmp;
-            sy += (fbmWorld(wx * 0.25 + 9.2, wy * 0.25 + 5.3, octaves) - 0.5) * warpAmp;
-          }
-
-          let [r, g, b] = sampleDayBilinear(sx, sy);
-          let wVal = sampleWaterBilinear(sx * 0.5, sy * 0.5);
-          if (g > b + 10 && wVal < 0.78) wVal = 0.0;
-
-          if (L >= 1 && wVal > 0.12 && wVal < 0.88) {
-            wVal += (fbmWorld(wx * 0.45, wy * 0.45, octaves) - 0.5) * 0.14;
-          }
-
-          let fr, fg, fb;
-          if (wVal > 0.50) {
-            // Real Oceans & Real Lakes ONLY (zero fake doughnut lakes!)
-            const depth = Math.min(1, (wVal - 0.50) * 2.4);
-            if (L >= 3 && wVal < 0.522) {
-              fr = 186; fg = 230; fb = 253; // Coastal surf
-            } else if (depth < 0.35) {
-              fr = 14; fg = 116; fb = 180;  // Turquoise shelf
-            } else if (depth < 0.70) {
-              fr = 18; fg = 64; fb = 152;   // Cobalt ocean
-            } else {
-              fr = 10; fg = 32; fb = 88;    // Deep abyss
-            }
-          } else {
-            // Boost natural vibrancy cleanly
-            const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-            r = Math.min(255, Math.max(0, lum + (r - lum) * 1.40));
-            g = Math.min(255, Math.max(0, lum + (g - lum) * 1.44));
-            b = Math.min(255, Math.max(0, lum + (b - lum) * 1.25));
-
-            // AI Intervention: Green the Sahara if activated
-            if (simState.saharaGreen && wx > 1800 && wx < 2600 && wy > 640 && wy < 880) {
-              r = 46; g = 148; b = 56;
-            }
-
-            // Sandy beach along real coastlines
-            if (L >= 3 && wVal > 0.455) {
-              r = 224; g = 198; b = 138;
-            }
-
-            // Smooth Coherent Elevation / Vegetation Contour Shading (NO static!)
-            if (L >= 2) {
-              let shade = (fbmWorld(wx * 0.55, wy * 0.55, octaves) - 0.5) * 28;
-              if (L >= 5) {
-                shade += (smoothNoise(wx * 4.5, wy * 4.5) - 0.5) * 14;
-              }
-              r = Math.min(255, Math.max(0, r + shade));
-              g = Math.min(255, Math.max(0, g + shade));
-              b = Math.min(255, Math.max(0, b + shade));
-            }
-
-            // Quantize into crisp 8-bit WorldBox topographic contour bands (18-step posterization)
-            const q = 18;
-            fr = Math.min(255, Math.round(r / q) * q);
-            fg = Math.min(255, Math.round(g / q) * q);
-            fb = Math.min(255, Math.round(b / q) * q);
-
-            // Sparse clean wildflowers at ground level ONLY in green biomes (never desert/snow)
-            if (L >= 6 && g > r * 0.95 && g > 85) {
-              const cellX = Math.floor(wx * 20), cellY = Math.floor(wy * 20);
-              if (hash2(cellX, cellY) > 0.986 && (Math.floor(wx * 40) % 2 === 0)) {
-                fr = 250; fg = 224; fb = 95;
-              }
-            }
-
-            // Smooth packed-dirt clearing around active human tribes
-            if (L >= 5) {
-              for (const tr of simState.tribes) {
-                const c = latLonToWorld(tr.lat, tr.lon);
-                const d = Math.hypot(wx - c.x, wy - c.y);
-                if (d < 1.3) {
-                  if (d < 0.72) { fr = 132; fg = 94; fb = 56; }
-                  else if (d < 1.12) { fr = 152; fg = 116; fb = 72; }
-                }
-              }
-            }
-          }
-
-          pxOut[outIdx] = fr;
-          pxOut[outIdx + 1] = fg;
-          pxOut[outIdx + 2] = fb;
-          pxOut[outIdx + 3] = 255;
-        }
-      }
-
-      ctx.putImageData(imgData, 0, 0);
-      const tex = PIXI.Texture.from(canvas);
-      tex.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
-
-      const sp = new PIXI.Sprite(tex);
-      sp.x = x0; sp.y = y0;
-      sp.width = tileWorldSize; sp.height = tileWorldSize;
-      sp.zIndex = L; sp.visible = false;
-      quadLayer.addChild(sp);
-      return sp;
-    }
-
-    function getOrCreateTile(L, tx, ty, immediate = false) {
-      const key = `${L}_${tx}_${ty}`;
-      if (tileCache.has(key)) {
-        const entry = tileCache.get(key);
-        entry.lastUsed = frameCounter;
-        return entry.sprite;
-      }
-      if (immediate) {
-        const sp = buildTileSprite(L, tx, ty);
-        tileCache.set(key, { sprite: sp, lastUsed: frameCounter, L });
-        return sp;
-      }
-      if (!queuedKeys.has(key)) {
-        queuedKeys.add(key);
-        genQueue.push({ L, tx, ty, key });
-      }
-      return null;
-    }
-
-    function invalidateAllTiles() {
-      for (const entry of tileCache.values()) {
-        quadLayer.removeChild(entry.sprite);
-        entry.sprite.texture.destroy(true);
-      }
-      tileCache.clear();
-      genQueue.length = 0;
-      queuedKeys.clear();
-      if (texturesReady) {
-        for (let ty = 0; ty < 4; ty++) {
-          for (let tx = 0; tx < 8; tx++) {
-            getOrCreateTile(0, tx, ty, true);
-          }
-        }
-      }
-    }
-
-    function updateQuadtree(zoom) {
-      if (!texturesReady) return 0;
-
-      const idealWorldSize = 240 / zoom;
-      let targetLOD = Math.round(Math.log2(512 / idealWorldSize));
-      targetLOD = Math.max(0, Math.min(9, targetLOD));
-
-      for (const entry of tileCache.values()) entry.sprite.visible = false;
-
-      const tileSize = 512 / Math.pow(2, targetLOD);
-      const maxCols = 8 * Math.pow(2, targetLOD);
-      const maxRows = 4 * Math.pow(2, targetLOD);
-
-      const startX = Math.max(0, Math.floor((-world.x / zoom) / tileSize));
-      const endX = Math.min(maxCols - 1, Math.floor(((window.innerWidth - world.x) / zoom) / tileSize));
-      const startY = Math.max(0, Math.floor((-world.y / zoom) / tileSize));
-      const endY = Math.min(maxRows - 1, Math.floor(((window.innerHeight - world.y) / zoom) / tileSize));
-
-      const centerWX = (window.innerWidth / 2 - world.x) / zoom;
-      const centerWY = (window.innerHeight / 2 - world.y) / zoom;
-
-      for (let ty = startY; ty <= endY; ty++) {
-        for (let tx = startX; tx <= endX; tx++) {
-          const sp = getOrCreateTile(targetLOD, tx, ty, false);
-          if (sp) {
-            sp.visible = true;
-          } else {
-            for (let ancL = targetLOD - 1; ancL >= 0; ancL--) {
-              const shift = targetLOD - ancL;
-              const ancKey = `${ancL}_${tx >> shift}_${ty >> shift}`;
-              if (tileCache.has(ancKey)) {
-                const anc = tileCache.get(ancKey);
-                anc.sprite.visible = true;
-                anc.lastUsed = frameCounter;
-                break;
-              }
-            }
-          }
-        }
-      }
-
-      if (genQueue.length > 0) {
-        genQueue.sort((a, b) => {
-          const sA = 512 / Math.pow(2, a.L), sB = 512 / Math.pow(2, b.L);
-          return Math.hypot((a.tx+0.5)*sA - centerWX, (a.ty+0.5)*sA - centerWY)
-               - Math.hypot((b.tx+0.5)*sB - centerWX, (b.ty+0.5)*sB - centerWY);
-        });
-        let built = 0;
-        while (genQueue.length > 0 && built < 4) {
-          const job = genQueue.shift();
-          queuedKeys.delete(job.key);
-          if (job.L !== targetLOD) continue;
-          const sp = buildTileSprite(job.L, job.tx, job.ty);
-          sp.visible = true;
-          tileCache.set(job.key, { sprite: sp, lastUsed: frameCounter, L: job.L });
-          built++;
-        }
-      }
-
-      if (tileCache.size > 280) {
-        let oldestKey = null, oldestTime = Infinity;
-        for (const [k, v] of tileCache.entries()) {
-          if (v.L > 0 && v.lastUsed < oldestTime) { oldestTime = v.lastUsed; oldestKey = k; }
-        }
-        if (oldestKey) {
-          const old = tileCache.get(oldestKey);
-          quadLayer.removeChild(old.sprite);
-          old.sprite.texture.destroy(true);
-          tileCache.delete(oldestKey);
-        }
-      }
-
-      return targetLOD;
+      return { greenness, isDesert, isSnow };
     }
 
     // =========================================================
-    // 5. HIGH-DETAIL 8-BIT SPRITE MATRICES (HUMANS, WILDLIFE, TREES)
+    // 3. BUILD PREHISTORIC MAPLIBRE STYLE (NO ROADS/CITIES + REAL 3D DEM)
     // =========================================================
-    function buildMatrixTex(rows, pal) {
+    const prehistoricStyle = {
+      version: 8,
+      sources: {
+        openmaptiles: {
+          type: "vector",
+          url: "https://tiles.openfreemap.org/planet"
+        },
+        terrarium: {
+          type: "raster-dem",
+          tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+          tileSize: 256,
+          maxzoom: 14,
+          encoding: "terrarium"
+        },
+        "biome-earth": {
+          type: "image",
+          url: biomeCanvas.toDataURL(),
+          coordinates: [[-180, 85.051129], [180, 85.051129], [180, -85.051129], [-180, -85.051129]]
+        }
+      },
+      layers: [
+        {
+          id: "background",
+          type: "background",
+          paint: { "background-color": "#4f853e" }
+        },
+        {
+          // Global NASA biome coloring (Sahara, Amazon, Congo, Siberia)
+          id: "biome-raster",
+          type: "raster",
+          source: "biome-earth",
+          paint: {
+            "raster-resampling": "nearest",
+            "raster-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.92, 13, 0.55]
+          }
+        },
+        {
+          // OpenStreetMap / Natural Earth vector forests, grass, sand, glaciers
+          id: "landcover-grass",
+          type: "fill",
+          source: "openmaptiles",
+          "source-layer": "landcover",
+          filter: ["in", ["get", "class"], ["literal", ["grass", "farmland", "wetland"]]],
+          paint: { "fill-color": "#4fa346", "fill-opacity": 0.45 }
+        },
+        {
+          id: "landcover-wood",
+          type: "fill",
+          source: "openmaptiles",
+          "source-layer": "landcover",
+          filter: ["==", ["get", "class"], "wood"],
+          paint: { "fill-color": "#1c6b36", "fill-opacity": 0.65 }
+        },
+        {
+          id: "landcover-sand",
+          type: "fill",
+          source: "openmaptiles",
+          "source-layer": "landcover",
+          filter: ["==", ["get", "class"], "sand"],
+          paint: { "fill-color": "#dcb876", "fill-opacity": 0.78 }
+        },
+        {
+          id: "landcover-ice",
+          type: "fill",
+          source: "openmaptiles",
+          "source-layer": "landcover",
+          filter: ["==", ["get", "class"], "ice"],
+          paint: { "fill-color": "#eef6ff", "fill-opacity": 0.9 }
+        },
+        {
+          // Real Elevation Coloring (only kicks in above 1100m so low deserts stay sandy!)
+          id: "elevation-relief",
+          type: "color-relief",
+          source: "terrarium",
+          paint: {
+            "color-relief-color": [
+              "interpolate", ["linear"], ["elevation"],
+              0,    "rgba(0, 0, 0, 0)",
+              1100, "rgba(0, 0, 0, 0)",
+              1800, "rgba(116, 98, 78, 0.36)",
+              2900, "rgba(108, 102, 98, 0.68)",
+              3900, "rgba(226, 232, 240, 0.85)",
+              4800, "rgba(255, 255, 255, 0.96)"
+            ]
+          }
+        },
+        {
+          // Multidirectional 3D Mountain Hillshade
+          id: "terrain-hillshade",
+          type: "hillshade",
+          source: "terrarium",
+          paint: {
+            "hillshade-method": "multidirectional",
+            "hillshade-exaggeration": 0.6,
+            "hillshade-shadow-color": "#1a2016",
+            "hillshade-highlight-color": "#fff8e7"
+          }
+        },
+        {
+          // Real Vector Oceans, Lakes, and Wide Rivers (covers biome-earth cleanly!)
+          id: "water-fill",
+          type: "fill",
+          source: "openmaptiles",
+          "source-layer": "water",
+          paint: {
+            "fill-color": ["interpolate", ["linear"], ["zoom"], 2, "#0c2d72", 10, "#124ca0", 14, "#1864bd"]
+          }
+        },
+        {
+          id: "waterway-rivers",
+          type: "line",
+          source: "openmaptiles",
+          "source-layer": "waterway",
+          paint: {
+            "line-color": "#2684d9",
+            "line-width": ["interpolate", ["linear"], ["zoom"], 4, 1, 12, 2.5, 16, 6]
+          }
+        }
+      ]
+    };
+
+    const map = new maplibregl.Map({
+      container: 'map',
+      style: prehistoricStyle,
+      center: [20, 14],
+      zoom: 1.5,
+      maxZoom: 17.5,
+      minZoom: 1.2,
+      renderWorldCopies: false,
+      attributionControl: false
+    });
+
+    map.setPixelRatio(PIXEL_RATIO);
+
+    map.on('load', () => {
+      map.setTerrain({ source: 'terrarium', exaggeration: 1.35 });
+      mapReady = true;
+      document.getElementById('start-btn').innerText = "ENTER 300,000 BCE";
+    });
+
+    map.on('error', (e) => {
+      // Prevent noisy non-fatal tile logs from blocking
+    });
+
+    // Safe Elevation Helper (meters above sea level)
+    function getElevMeters(lon, lat) {
+      if (!mapReady) return null;
+      const e = map.queryTerrainElevation([lon, lat], { exaggerated: false });
+      return (e === null || e === undefined || isNaN(e)) ? null : e;
+    }
+
+    // Check if screen point is over vector water
+    function isPointInWater(lon, lat) {
+      if (!mapReady) return false;
+      const pt = map.project([lon, lat]);
+      const feats = map.queryRenderedFeatures([pt.x, pt.y], { layers: ['water-fill', 'waterway-rivers'] });
+      return feats.length > 0;
+    }
+
+    // Live Elevation Hover Readout
+    map.on('mousemove', (e) => {
+      if (!mapReady) return;
+      const elev = getElevMeters(e.lngLat.lng, e.lngLat.lat);
+      const water = isPointInWater(e.lngLat.lng, e.lngLat.lat);
+      const elSpan = document.getElementById('elev-text');
+      if (water) elSpan.innerText = "Water";
+      else if (elev !== null) elSpan.innerText = `Elev: ${Math.round(elev).toLocaleString()}m`;
+      else elSpan.innerText = "Elev: -- m";
+    });
+
+    // =========================================================
+    // 4. HIGH-DETAIL 8-BIT SPRITE MATRICES
+    // =========================================================
+    function buildSpriteCanvas(rows, pal) {
       const h = rows.length, w = rows[0].length;
       const c = document.createElement('canvas'); c.width = w; c.height = h;
       const ctx = c.getContext('2d');
@@ -741,9 +663,7 @@
           if (ch !== '.' && pal[ch]) { ctx.fillStyle = pal[ch]; ctx.fillRect(x, y, 1, 1); }
         }
       }
-      const t = PIXI.Texture.from(c);
-      t.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
-      return t;
+      return c;
     }
 
     const hPal = {
@@ -752,7 +672,7 @@
       'F': '#9a3412', 'f': '#c2410c', 'L': '#451a03', 'P': '#78350f', 'M': '#94a3b8', 'm': '#e2e8f0', 'B': '#d97706'
     };
 
-    const texHunter1 = buildMatrixTex([
+    const sprHunter1 = buildSpriteCanvas([
       '.............O......','............OMO.....','...........OMmO.....','......OOOOO.OMO.....',
       '.....OHhhhHO.O......','....OHHHHHHHOOPO....','....OHssSssHOOPO....','....OHWEsEWHOOPO....',
       '....O.SsdSs.O.P.....','.....OSSSSSO..P.....','......OdddO...P.....','....OOFFFFFOO.P.....',
@@ -761,7 +681,7 @@
       '.....OLLO..OLLO.....','....OLLO....OLLO....','....OOO......OOO....'
     ], hPal);
 
-    const texHunter2 = buildMatrixTex([
+    const sprHunter2 = buildSpriteCanvas([
       '.............O......','............OMO.....','...........OMmO.....','......OOOOO.OMO.....',
       '.....OHhhhHO.O......','....OHHHHHHHOOPO....','....OHssSssHOOPO....','....OHWEsEWHOOPO....',
       '....O.SsdSs.O.P.....','.....OSSSSSO..P.....','......OdddO...P.....','....OOFFFFFOO.P.....',
@@ -770,7 +690,7 @@
       '......OLLO.OLLO.....','.....OLLO...OLLO....','.....OOO.....OOO....'
     ], hPal);
 
-    const texGatherer = buildMatrixTex([
+    const sprGatherer = buildSpriteCanvas([
       '......OOOO..........','.....OHhhhHO........','....OHHHHHHHO.......','....OHssSssHO.......',
       '....OHWEsEWHO.......','....O.SsdSs.O.......','.....OSSSSSO........','......OdddO.........',
       '....OOFFFFFOO.......','...OSOffffFFSO.OBBO.','...OSOffFFffSOOBBBBO','....O.FFLLFFOOBBBBBO',
@@ -778,7 +698,7 @@
       '.....OLLO..OLLO.....','....OLLO....OLLO....','....OOO......OOO....'
     ], hPal);
 
-    const texElder = buildMatrixTex([
+    const sprElder = buildSpriteCanvas([
       '..O.................','.OHO................','.OHO..OOOOO.........','.OHO.OGGGGGGO.......',
       '.OHOOGGssSssGO......','.OHOOGGWEsEWGO......','.OHO.O.SsdSsO.......','.OPO..OGGGGGO.......',
       '.OPO..OGGGGO........','.OPO.OOFFFFFOO......','.OPOOSOffffFFSO.....','.OPO.O.FFLLFFO......',
@@ -786,28 +706,28 @@
       '.OOO...OOO...OOO....'
     ], hPal);
 
-    const texBearBrown = buildMatrixTex([
+    const sprBearBrown = buildSpriteCanvas([
       '....OO.......OO.....','...OBBOOOOOOOBBO....','..OBBBBBBBBBBBBBO...','..OBWEBBBBBBBEWBO...',
       '..OBBBBBBBBBBBBBO...','..OBBBBOOOOOBBBBO...','.OBBBBBBBBBBBBBBBO..','OBBBBBBBBBBBBBBBBBO.',
       'OBBBBBBBBBBBBBBBBBO.','OBBBBBBBBBBBBBBBBBO.','.OOBBBOOOOOOBBBOO...','..OBBO......OBBO....',
       '..OBBO......OBBO....','..OOO........OOO....'
     ], { 'O': '#1c120c', 'B': '#6b3e23', 'W': '#f8fafc', 'E': '#0f172a' });
 
-    const texBearPolar = buildMatrixTex([
+    const sprBearPolar = buildSpriteCanvas([
       '....OO.......OO.....','...OWWOOOOOOOWWO....','..OWWWWWWWWWWWWWO...','..OWWEWWWWWWWEWWO...',
       '..OWWWWWWWWWWWWWO...','..OWWWWOOOOOWWWWO...','.OWWWWWWWWWWWWWWWOO.','OWWWWWWWWWWWWWWWWWO.',
       'OWWWWWWWWWWWWWWWWWO.','OWWWWWWWWWWWWWWWWWO.','.OOWWWOOOOOOWWWOO...','..OWWO......OWWO....',
       '..OWWO......OWWO....','..OOO........OOO....'
     ], { 'O': '#64748b', 'W': '#f8fafc', 'E': '#0f172a' });
 
-    const texHorse = buildMatrixTex([
+    const sprHorse = buildSpriteCanvas([
       '..............OO....','.............OMMO...','............OMBBBO..','...........OMBBWEBO.',
       '..........OMBBBBBO..','...OOOOOOOOMBBBOO...','..OMBBBBBBBBBO......','.OMBBBBBBBBBBBO.....',
       '.O.OBBBBBBBBBO......','...OBBO...OBBO......','...OBBO...OBBO......','...O.O.....O.O......',
       '...O.O.....O.O......'
     ], { 'O': '#1e130c', 'B': '#9a4f23', 'M': '#291d16', 'W': '#f8fafc', 'E': '#0f172a' });
 
-    const texMammoth = buildMatrixTex([
+    const sprMammoth = buildSpriteCanvas([
       '........OOOOOO..........','......OOBBBBBBOO........','....OOBBBBBBBBBBBO......',
       '...OBBBBBBBBBBBBBBO.....','..OBBBBBBBBBBBBEWBO.OO..','..OBBBBBBBBBBBBBBBBOIIO.',
       '.OBBBBBBBBBBBBBBBBBBOOIO','.OBBBBBBBBBBBBBBBBBO.IIO','.OBBBBBBBBBBBBBBBBO..OO.',
@@ -815,19 +735,19 @@
       '....OBBO....OBBO........','....OOO......OOO........'
     ], { 'O': '#1e140f', 'B': '#5c3a21', 'I': '#fef3c7', 'W': '#f8fafc', 'E': '#0f172a' });
 
-    const texLion = buildMatrixTex([
+    const sprLion = buildSpriteCanvas([
       '.............OOOOO..','............OMMMMMO.','...........OMGGGGGMO','..........OMGGWEWGMO',
       '...OOOOOO..OMGGGGMO.','..OGGGGGGOOOMMMMMO..','.OGGGGGGGGGGGMOO....','.OGGGGGGGGGGGGO.....',
       '..OGGGOOOOGGGO......','..OGGO....OGGO......','..OGGO....OGGO......','..OOO......OOO......'
     ], { 'O': '#291d16', 'G': '#eab308', 'M': '#78350f', 'W': '#f8fafc', 'E': '#0f172a' });
 
-    const texGazelle = buildMatrixTex([
+    const sprGazelle = buildSpriteCanvas([
       '.............O.O....','............O...O...','...........ODDDDDO..','..........ODDEWDDO..',
       '...OOOOOO.ODDDDDDO..','..ODDDDDDODDDDOOO...','.ODDDDDDDDDDDDO.....','.OWWWWWWWWWWWDO.....',
       '..O.O.....O.O.......','..O.O.....O.O.......'
     ], { 'O': '#291d16', 'D': '#d97706', 'W': '#fef3c7', 'E': '#0f172a' });
 
-    const acaciaTex = buildMatrixTex([
+    const sprAcacia = buildSpriteCanvas([
       '........OOOOOOOOOOOOOO............','....OOOOLLLLLLLLLLLLLLOOOO........',
       '..OOLLLLGGGGGGGGGGGGGGLLLLOO......','.OLGGGGGGGGGGGGGGGGGGGGGGGGLO.....',
       'OLGGGGGGGGGGGGGGGGGGGGGGGGGGGO....','ODGGGGGGGDDDDDGGGGGGDDDDGGGGDDO...',
@@ -839,7 +759,7 @@
       '...........OOBBBBBO...............','..........OOOOOOOOO...............'
     ], { 'O': '#0f291e', 'L': '#86efac', 'G': '#22c55e', 'D': '#15803d', 'B': '#5c3a21' });
 
-    const oakTex = buildMatrixTex([
+    const sprOak = buildSpriteCanvas([
       '......OOOOOOOOOO........','....OOLLLLGGGGGGGOO.....','..OOLLLGGGGGGGGGGGGOO...',
       '.OLLGGGGGGGGGGGDDDDGGO..','OLGGGGGGGDDDDDDDDDDDGGO.','OGGGGGDDDDDDDDDDDDDDDDO.',
       'ODDDDDDDDDDDDDDDDDDDDDO.','.OODDDDDDDDDDDDDDDDDOO..','...OOOOOOOBBBBOOOOOOO...',
@@ -847,39 +767,14 @@
       '......OOOOOOOOOOO.......'
     ], { 'O': '#0f291e', 'L': '#86efac', 'G': '#22c55e', 'D': '#15803d', 'B': '#5c3a21' });
 
-    const jungleTex = buildMatrixTex([
-      '......OOOOOOOOOO........','....OOLLLLGGGGGGGOO.....','..OOLLLGGGGGGGGGGGGOO...',
-      '.OLLGGGGGGGGGGGDDDDGGO..','OLGGGGGGGDDDDDDDDDDDGGO.','OGGGGGDDDDDDDDDDDDDDDDO.',
-      'ODDDDDDDDDDDDDDDDDDDDDO.','.OODDDDDDDDDDDDDDDDDOO..','...OOOOOOOBBBBOOOOOOO...',
-      '........OOBBBBO.........','........OOBBBBO.........','.......OOBBBBBBO........',
-      '......OOOOOOOOOOO.......'
-    ], { 'O': '#052e16', 'L': '#4ade80', 'G': '#16a34a', 'D': '#14532d', 'B': '#451a03' });
-
-    const pineTex = buildMatrixTex([
+    const sprPine = buildSpriteCanvas([
       '.........OO.........','........OGGO........','.......OGDDGO.......','......OOODDOOO......',
       '.......OGGGGO.......','......OGGDDDGO......','.....OGGDDDDDGO.....','....OOODDDDDDOOO....',
       '.....OGGGGGGGGO.....','....OGGGDDDDDDGO....','...OGGGDDDDDDDDGO...','..OOOOODDDDDDOOOOO..',
       '........OBBO........','........OBBO........','.......OOOOOO.......'
     ], { 'O': '#022c22', 'G': '#10b981', 'D': '#065f46', 'B': '#451a03' });
 
-    const cactusTex = buildMatrixTex([
-      '....OOO......','...OGGGO.....','.OOGGGDO..OO.','OGGOGGDO.OGGO',
-      'OGDOGGDOOOGDO','.OOGGGDDDDDO.','...OGGDOOOOO.','...OGGDO.....','...OOOOO.....'
-    ], { 'O': '#052e16', 'G': '#4ade80', 'D': '#15803d' });
-
-    const grassTex = buildMatrixTex([
-      '..O...O...','.OGO.OG..O','.OGDOOGDO.','OOGDDDDDO.','.OOOOOOO..'
-    ], { 'O': '#14532d', 'G': '#84cc16', 'D': '#4d7c0f' });
-
-    const desertRockTex = buildMatrixTex([
-      '....OOOOO...','..OOBBBBBO..','.OBBMMMMMDO.','OBMMMMDDDDDO','ODDDDDDDDDDO','.OOOOOOOOOO.'
-    ], { 'O': '#451a03', 'B': '#f59e0b', 'M': '#d97706', 'D': '#92400e' });
-
-    const rockTex = buildMatrixTex([
-      '....OOOOO...','..OOLLLLLO..','.OLLMMMMMDO.','OLMMMMDDDDDO','ODDDDDDDDDDO','.OOOOOOOOOO.'
-    ], { 'O': '#1e293b', 'L': '#cbd5e1', 'M': '#94a3b8', 'D': '#475569' });
-
-    const hutTex = buildMatrixTex([
+    const sprHut = buildSpriteCanvas([
       '.............O..O.............','............O.OO.O............','..........OOFFFFFFOO..........',
       '........OOFFFFffffffOO........','......OOFFFFffffffFFFFOO......','....OOFFFFffffffffffFFFFOO....',
       '...OFFFFffffffffffffffFFFFO...','..OFFFFffffffOOOOOOffffFFFFO..','.OFFFFfffffOOIIIIIIOOfffFFFFO.',
@@ -887,351 +782,137 @@
       'OOOOOOOOOOOOOOOOOOOOOOOOOOOOOO'
     ], { 'O': '#1c1917', 'F': '#9a3412', 'f': '#c2410c', 'L': '#78350f', 'I': '#0c0a09' });
 
-    const rackTex = buildMatrixTex([
+    const sprRack = buildSpriteCanvas([
       '.O..........O.','.OBOOOOOOOOOBO','.OBBBBBBBBBBO.','.OB.ORRRRO.BO.',
       '.OB.ORssRO.BO.','.OB.ORRRRO.BO.','.OB........BO.','.OO........OO.'
     ], { 'O': '#1c1917', 'B': '#78350f', 'R': '#dc2626', 's': '#fca5a5' });
 
-    const glowCanvas = document.createElement('canvas');
-    glowCanvas.width = 128; glowCanvas.height = 128;
-    const gctx = glowCanvas.getContext('2d');
-    const grad = gctx.createRadialGradient(64, 64, 4, 64, 64, 64);
-    grad.addColorStop(0, 'rgba(255, 160, 50, 0.9)');
-    grad.addColorStop(0.4, 'rgba(249, 115, 22, 0.45)');
-    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    gctx.fillStyle = grad; gctx.fillRect(0, 0, 128, 128);
-    const fireGlowTex = PIXI.Texture.from(glowCanvas);
-
     // =========================================================
-    // 6. ACCURATE BIOME FOLIAGE (BARREN SAHARA, LUSH JUNGLES)
-    // =========================================================
-    const TREE_POOL_SIZE = 2400;
-    const treePool = [];
-    for (let i = 0; i < TREE_POOL_SIZE; i++) {
-      const sp = new PIXI.Sprite(oakTex);
-      sp.anchor.set(0.5, 0.9);
-      sp.visible = false;
-      treesLayer.addChild(sp);
-      treePool.push(sp);
-    }
-
-    const PROP_POOL_SIZE = 1800;
-    const propPool = [];
-    for (let i = 0; i < PROP_POOL_SIZE; i++) {
-      const sp = new PIXI.Sprite(grassTex);
-      sp.anchor.set(0.5, 0.9);
-      sp.visible = false;
-      propsLayer.addChild(sp);
-      propPool.push(sp);
-    }
-
-    function updateDenseEcosystem(zoom) {
-      if (!texturesReady) return;
-
-      const treeAlpha = Math.max(0, Math.min(1, (zoom - 26) / 50));
-      treesLayer.alpha = treeAlpha;
-
-      if (treeAlpha <= 0.01) {
-        for (let i = 0; i < TREE_POOL_SIZE; i++) treePool[i].visible = false;
-      } else {
-        const CELL = 0.65;
-        const startX = Math.max(0, Math.floor((-world.x / zoom) / CELL) - 1);
-        const endX = Math.min(Math.floor(MAP_WIDTH / CELL), Math.ceil(((window.innerWidth - world.x) / zoom) / CELL) + 1);
-        const startY = Math.max(0, Math.floor((-world.y / zoom) / CELL) - 1);
-        const endY = Math.min(Math.floor(MAP_HEIGHT / CELL), Math.ceil(((window.innerHeight - world.y) / zoom) / CELL) + 1);
-
-        let idx = 0;
-        for (let cy = startY; cy <= endY && idx < TREE_POOL_SIZE; cy++) {
-          for (let cx = startX; cx <= endX && idx < TREE_POOL_SIZE; cx++) {
-            const h1 = hash2(cx, cy);
-            const wx = (cx + h1 * 0.85) * CELL;
-            const wy = (cy + hash2(cx + 17, cy + 9) * 0.85) * CELL;
-
-            // Keep camp clearings open
-            let inClearing = false;
-            for (const tr of simState.tribes) {
-              const c = latLonToWorld(tr.lat, tr.lon);
-              if (Math.hypot(wx - c.x, wy - c.y) < 1.45) { inClearing = true; break; }
-            }
-            if (inClearing) continue;
-
-            // Sample real Earth nature smoothly at this exact point
-            const nat = sampleGroundNature(wx, wy);
-            if (nat.wVal > 0.48 || nat.isSnow) continue;
-
-            // AI Sahara greening override
-            let greenness = nat.greenness;
-            let isDesert = nat.isDesert;
-            if (simState.saharaGreen && wx > 1800 && wx < 2600 && wy > 640 && wy < 880) {
-              greenness = 55; isDesert = false;
-            }
-
-            // Old World Deserts (Sahara, Arabia, Gobi) have ZERO trees & ZERO cacti!
-            const isAmericas = wx < 1450;
-            if (isDesert) {
-              if (isAmericas && h1 < 0.03) {
-                const sp = treePool[idx++];
-                sp.texture = cactusTex; sp.x = wx; sp.y = wy;
-                sp.scale.set(0.011); sp.visible = true;
-              }
-              continue;
-            }
-
-            const isTropical = wy > 740 && wy < 1310;
-            const isBoreal = wy < 460 || wy > 1580;
-            const grove = smoothNoise(wx * 0.3, wy * 0.3);
-
-            let chance = 0, tex = oakTex;
-            if (greenness > 36) {
-              // Dense Forest / Jungle
-              chance = 0.65 + grove * 0.30;
-              tex = isTropical ? jungleTex : (isBoreal ? pineTex : (h1 > 0.5 ? oakTex : pineTex));
-            } else if (greenness > 20) {
-              // Meadow / Woodland
-              chance = 0.28 + grove * 0.45;
-              tex = isTropical ? acaciaTex : (isBoreal ? pineTex : (h1 > 0.4 ? oakTex : pineTex));
-            } else if (greenness > 8 && !isDesert) {
-              // Dry Savanna / Foothills (no trees in Sahara!)
-              chance = isTropical ? (0.14 + grove * 0.25) : (0.08 + grove * 0.25);
-              tex = isTropical ? acaciaTex : (h1 > 0.45 ? pineTex : oakTex);
-            }
-
-            if (h1 < chance) {
-              const sp = treePool[idx++];
-              sp.texture = tex;
-              sp.x = wx; sp.y = wy;
-              sp.scale.set(0.0135 * (0.85 + hash2(cx * 3, cy * 5) * 0.32));
-              sp.visible = true;
-            }
-          }
-        }
-        for (let i = idx; i < TREE_POOL_SIZE; i++) treePool[i].visible = false;
-      }
-
-      // Grass tufts & rocks (accurate to desert vs meadow!)
-      const propAlpha = Math.max(0, Math.min(1, (zoom - 85) / 90));
-      propsLayer.alpha = propAlpha;
-
-      if (propAlpha <= 0.01) {
-        for (let i = 0; i < PROP_POOL_SIZE; i++) propPool[i].visible = false;
-      } else {
-        const PCELL = 0.28;
-        const startX = Math.max(0, Math.floor((-world.x / zoom) / PCELL) - 1);
-        const endX = Math.min(Math.floor(MAP_WIDTH / PCELL), Math.ceil(((window.innerWidth - world.x) / zoom) / PCELL) + 1);
-        const startY = Math.max(0, Math.floor((-world.y / zoom) / PCELL) - 1);
-        const endY = Math.min(Math.floor(MAP_HEIGHT / PCELL), Math.ceil(((window.innerHeight - world.y) / zoom) / PCELL) + 1);
-
-        let idx = 0;
-        for (let cy = startY; cy <= endY && idx < PROP_POOL_SIZE; cy++) {
-          for (let cx = startX; cx <= endX && idx < PROP_POOL_SIZE; cx++) {
-            const h = hash2(cx + 500, cy + 500);
-            if (h > 0.42) continue;
-
-            const wx = (cx + hash2(cx, cy)) * PCELL;
-            const wy = (cy + hash2(cx + 9, cy + 4)) * PCELL;
-            const nat = sampleGroundNature(wx, wy);
-            if (nat.wVal > 0.48) continue;
-
-            // Deserts only get rare sandstone rocks (NO green grass tufts in the Sahara!)
-            if (nat.isDesert) {
-              if (h > 0.04) continue;
-              const sp = propPool[idx++];
-              sp.texture = desertRockTex;
-              sp.x = wx; sp.y = wy; sp.scale.set(0.0040); sp.visible = true;
-              continue;
-            }
-
-            if (nat.isSnow) {
-              if (h > 0.05) continue;
-              const sp = propPool[idx++];
-              sp.texture = rockTex;
-              sp.x = wx; sp.y = wy; sp.scale.set(0.0040); sp.visible = true;
-              continue;
-            }
-
-            const sp = propPool[idx++];
-            sp.texture = (h < 0.06) ? rockTex : grassTex;
-            sp.x = wx; sp.y = wy;
-            sp.scale.set(0.0042);
-            sp.visible = true;
-          }
-        }
-        for (let i = idx; i < PROP_POOL_SIZE; i++) propPool[i].visible = false;
-      }
-    }
-
-    // =========================================================
-    // 7. CAMPS, HUMANS, HUNTS, WILDLIFE & "SHOW ON MAP" PINS
+    // 5. AGENTS (GEO-COORDINATES WITH REAL ELEVATION & WATER CHECKS)
     // =========================================================
     const humanAgents = [];
     const wildAnimals = [];
-    const campVisuals = [];
     const gazelles = [];
+    const smokeParticles = [];
+
+    // Helper: pick valid land destination respecting elevation < 3800m, slope, and water!
+    function pickSafeStep(curLon, curLat, homeLon, homeLat, maxDeg) {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const ang = Math.random() * Math.PI * 2;
+        const rad = (0.15 + Math.random() * 0.85) * maxDeg;
+        const nl = homeLon + Math.cos(ang) * rad;
+        const na = homeLat + Math.sin(ang) * rad;
+
+        if (isPointInWater(nl, na)) continue;
+        const eCur = getElevMeters(curLon, curLat);
+        const eNext = getElevMeters(nl, na);
+        if (eNext !== null) {
+          if (eNext <= 1 || eNext > 3800) continue; // No ocean, no Mt. Everest!
+          if (eCur !== null && Math.abs(eNext - eCur) > 180) continue; // Avoid sheer cliffs!
+        }
+        return { lon: nl, lat: na };
+      }
+      return { lon: curLon, lat: curLat };
+    }
 
     function spawnTribeOnMap(tribe) {
-      const center = latLonToWorld(tribe.lat, tribe.lon);
-
-      const hearth = new PIXI.Graphics();
-      campLayer.addChild(hearth);
-
-      const fireGlow = new PIXI.Sprite(fireGlowTex);
-      fireGlow.anchor.set(0.5);
-      fireGlow.x = center.x; fireGlow.y = center.y;
-      fireGlow.scale.set(0.028);
-      fireGlow.blendMode = PIXI.BLEND_MODES.ADD;
-      fireGlow.visible = tribe.fireLit;
-      nightWorldGlowLayer.addChild(fireGlow);
-
-      const smoke = [];
-      for (let i = 0; i < 12; i++) {
-        const p = new PIXI.Graphics();
-        p.beginFill(0xcbd5e1, 0.65); p.drawRect(-0.008, -0.008, 0.02, 0.02); p.endFill();
-        p.x = center.x; p.y = center.y - 0.03; p.life = Math.random(); p.visible = tribe.fireLit;
-        campLayer.addChild(p);
-        smoke.push(p);
-      }
-
-      const hutGroup = new PIXI.Container();
-      campLayer.addChild(hutGroup);
-
-      const rack = new PIXI.Sprite(rackTex);
-      rack.anchor.set(0.5, 0.9);
-      rack.x = center.x + 0.35; rack.y = center.y + 0.25;
-      rack.scale.set(0.005);
-      rack.visible = false;
-      campLayer.addChild(rack);
-
-      campVisuals.push({ tribe, center, hearth, fireGlow, smoke, hutGroup, rack });
-
+      tribe.hutsCoords = [];
       for (let i = 0; i < 14; i++) {
-        addHumanToTribe(tribe, center, i === 0 ? "Firekeeper" : (i % 2 === 0 ? "Hunter" : "Gatherer"));
+        addHumanToTribe(tribe, i === 0 ? "Firekeeper" : (i % 2 === 0 ? "Hunter" : "Gatherer"));
       }
-
       for (let i = 0; i < 6; i++) {
-        const g = new PIXI.Sprite(texGazelle);
-        g.anchor.set(0.5, 0.9);
-        g.scale.set(0.0042);
-        g.x = center.x + (Math.random() > 0.5 ? 1.5 : -1.5) + (Math.random() - 0.5) * 0.6;
-        g.y = center.y + (Math.random() - 0.5) * 1.2;
-        entitiesLayer.addChild(g);
-        gazelles.push({ sprite: g, home: { x: g.x, y: g.y }, tx: g.x, ty: g.y, wait: 0, alive: true });
+        const gLon = tribe.lon + (Math.random() > 0.5 ? 0.008 : -0.008) + (Math.random() - 0.5) * 0.004;
+        const gLat = tribe.lat + (Math.random() - 0.5) * 0.008;
+        gazelles.push({ lon: gLon, lat: gLat, homeLon: gLon, homeLat: gLat, tLon: gLon, tLat: gLat, wait: 0, dir: 1, alive: true });
+      }
+      for (let i = 0; i < 12; i++) {
+        smokeParticles.push({ tribe, dx: 0, dy: 0, life: Math.random() });
       }
     }
 
-    function addHumanToTribe(tribe, center, role) {
-      const sp = new PIXI.Sprite(role === "Firekeeper" ? texElder : (role === "Hunter" ? texHunter1 : texGatherer));
-      sp.anchor.set(0.5, 0.95);
-      sp.scale.set(0.0044);
-      const a = Math.random() * Math.PI * 2, r = 0.1 + Math.random() * 0.8;
-      sp.x = center.x + Math.cos(a) * r;
-      sp.y = center.y + Math.sin(a) * r;
-      campLayer.addChild(sp);
-
+    function addHumanToTribe(tribe, role) {
+      const a = Math.random() * Math.PI * 2, r = 0.0005 + Math.random() * 0.0035;
+      const lon = tribe.lon + Math.cos(a) * r, lat = tribe.lat + Math.sin(a) * r;
       humanAgents.push({
-        sprite: sp, role, home: center, tribe,
-        targetX: sp.x, targetY: sp.y,
-        wait: Math.random() * 80, anim: 0, huntingTarget: null
+        tribe, role, lon, lat,
+        tLon: lon, tLat: lat,
+        dir: 1, wait: Math.random() * 80, anim: 0, huntingTarget: null
       });
     }
 
     function populateHistoricalWildlife() {
-      wildAnimals.forEach(w => entitiesLayer.removeChild(w.sprite));
       wildAnimals.length = 0;
 
       SPECIES_ZONES.bears.forEach(z => {
-        const c = latLonToWorld(z.lat, z.lon);
         for (let i = 0; i < 6; i++) {
-          const sp = new PIXI.Sprite(z.variant === "polar" ? texBearPolar : texBearBrown);
-          sp.anchor.set(0.5, 0.9); sp.scale.set(0.0052);
-          sp.x = c.x + (Math.random() - 0.5) * 1.8; sp.y = c.y + (Math.random() - 0.5) * 1.8;
-          entitiesLayer.addChild(sp);
-          wildAnimals.push({ type: "bears", sprite: sp, home: c, tx: sp.x, ty: sp.y, wait: Math.random()*100 });
+          const lon = z.lon + (Math.random() - 0.5) * 0.02, lat = z.lat + (Math.random() - 0.5) * 0.02;
+          wildAnimals.push({ type: "bears", variant: z.variant, lon, lat, homeLon: z.lon, homeLat: z.lat, tLon: lon, tLat: lat, dir: 1, wait: Math.random()*100 });
         }
       });
 
       SPECIES_ZONES.horses.forEach(z => {
         if (z.region === "Americas" && !simState.horsesInAmericas) return;
-        const c = latLonToWorld(z.lat, z.lon);
         for (let i = 0; i < 8; i++) {
-          const sp = new PIXI.Sprite(texHorse);
-          sp.anchor.set(0.5, 0.9); sp.scale.set(0.0048);
-          sp.x = c.x + (Math.random() - 0.5) * 2.0; sp.y = c.y + (Math.random() - 0.5) * 2.0;
-          entitiesLayer.addChild(sp);
-          wildAnimals.push({ type: "horses", sprite: sp, home: c, tx: sp.x, ty: sp.y, wait: Math.random()*100 });
+          const lon = z.lon + (Math.random() - 0.5) * 0.025, lat = z.lat + (Math.random() - 0.5) * 0.025;
+          wildAnimals.push({ type: "horses", lon, lat, homeLon: z.lon, homeLat: z.lat, tLon: lon, tLat: lat, dir: 1, wait: Math.random()*100 });
         }
       });
 
       if (simState.mammothsAlive) {
         SPECIES_ZONES.mammoths.forEach(z => {
-          const c = latLonToWorld(z.lat, z.lon);
           for (let i = 0; i < 5; i++) {
-            const sp = new PIXI.Sprite(texMammoth);
-            sp.anchor.set(0.5, 0.9); sp.scale.set(0.0068);
-            sp.x = c.x + (Math.random() - 0.5) * 2.2; sp.y = c.y + (Math.random() - 0.5) * 2.2;
-            entitiesLayer.addChild(sp);
-            wildAnimals.push({ type: "mammoths", sprite: sp, home: c, tx: sp.x, ty: sp.y, wait: Math.random()*100 });
+            const lon = z.lon + (Math.random() - 0.5) * 0.025, lat = z.lat + (Math.random() - 0.5) * 0.025;
+            wildAnimals.push({ type: "mammoths", lon, lat, homeLon: z.lon, homeLat: z.lat, tLon: lon, tLat: lat, dir: 1, wait: Math.random()*100 });
           }
         });
       }
 
       SPECIES_ZONES.lions.forEach(z => {
-        const c = latLonToWorld(z.lat, z.lon);
         for (let i = 0; i < 5; i++) {
-          const sp = new PIXI.Sprite(texLion);
-          sp.anchor.set(0.5, 0.9); sp.scale.set(0.0048);
-          sp.x = c.x + (Math.random() - 0.5) * 2.0; sp.y = c.y + (Math.random() - 0.5) * 2.0;
-          entitiesLayer.addChild(sp);
-          wildAnimals.push({ type: "lions", sprite: sp, home: c, tx: sp.x, ty: sp.y, wait: Math.random()*100 });
+          const lon = z.lon + (Math.random() - 0.5) * 0.02, lat = z.lat + (Math.random() - 0.5) * 0.02;
+          wildAnimals.push({ type: "lions", lon, lat, homeLon: z.lon, homeLat: z.lat, tLon: lon, tLat: lat, dir: 1, wait: Math.random()*100 });
         }
       });
 
       updateTrackerCounts();
     }
 
-    const activePins = [];
-    function rebuildMapPins() {
-      pinLayer.removeChildren();
-      activePins.length = 0;
+    // =========================================================
+    // 6. "SHOW ON MAP:" HTML PINS SYNCED VIA map.project()
+    // =========================================================
+    let currentPinsData = [];
 
-      function addPin(lat, lon, color, label, flyZoom = 220) {
-        const pos = latLonToWorld(lat, lon);
-        const cont = new PIXI.Container();
-        cont.x = pos.x; cont.y = pos.y;
-        cont.eventMode = 'static';
-        cont.cursor = 'pointer';
-
-        const dot = new PIXI.Graphics();
-        dot.lineStyle(2, 0xffffff, 0.9);
-        dot.beginFill(color, 0.85);
-        dot.drawCircle(0, 0, 8);
-        dot.endFill();
-
-        const txt = new PIXI.Text(label, {
-          fontFamily: 'monospace', fontSize: 11, fontWeight: 'bold',
-          fill: 0xffffff, stroke: 0x020617, strokeThickness: 3
-        });
-        txt.anchor.set(0.5, 1.5);
-        cont.addChild(dot, txt);
-
-        cont.on('pointerdown', (e) => {
-          e.stopPropagation();
-          flyTo(pos.x, pos.y, flyZoom, 1800);
-        });
-
-        pinLayer.addChild(cont);
-        activePins.push(cont);
+    function rebuildPinData() {
+      currentPinsData = [];
+      if (simState.trackers.humans) {
+        simState.tribes.forEach(t => currentPinsData.push({ lat: t.lat, lon: t.lon, color: '#38bdf8', label: `👤 ${t.name}`, zoom: 14.6 }));
       }
-
-      if (simState.trackers.humans) simState.tribes.forEach(t => addPin(t.lat, t.lon, 0x38bdf8, `👤 ${t.name}`, 260));
-      if (simState.trackers.bears) SPECIES_ZONES.bears.forEach(z => addPin(z.lat, z.lon, 0xd97706, `🐻 ${z.name}`, 200));
+      if (simState.trackers.bears) {
+        SPECIES_ZONES.bears.forEach(z => currentPinsData.push({ lat: z.lat, lon: z.lon, color: '#d97706', label: `🐻 ${z.name}`, zoom: 13.8 }));
+      }
       if (simState.trackers.horses) {
         SPECIES_ZONES.horses.forEach(z => {
           if (z.region === "Americas" && !simState.horsesInAmericas) return;
-          addPin(z.lat, z.lon, 0x22c55e, `🐎 ${z.name}`, 200);
+          currentPinsData.push({ lat: z.lat, lon: z.lon, color: '#22c55e', label: `🐎 ${z.name}`, zoom: 13.8 });
         });
       }
-      if (simState.trackers.mammoths && simState.mammothsAlive) SPECIES_ZONES.mammoths.forEach(z => addPin(z.lat, z.lon, 0xa855f7, `🦣 ${z.name}`, 200));
-      if (simState.trackers.lions) SPECIES_ZONES.lions.forEach(z => addPin(z.lat, z.lon, 0xfbbf24, `🦁 ${z.name}`, 200));
+      if (simState.trackers.mammoths && simState.mammothsAlive) {
+        SPECIES_ZONES.mammoths.forEach(z => currentPinsData.push({ lat: z.lat, lon: z.lon, color: '#a855f7', label: `🦣 ${z.name}`, zoom: 13.8 }));
+      }
+      if (simState.trackers.lions) {
+        SPECIES_ZONES.lions.forEach(z => currentPinsData.push({ lat: z.lat, lon: z.lon, color: '#fbbf24', label: `🦁 ${z.name}`, zoom: 13.8 }));
+      }
+
+      const container = document.getElementById('pins-layer');
+      container.innerHTML = '';
+      currentPinsData.forEach((p, idx) => {
+        const el = document.createElement('div');
+        el.className = 'map-pin';
+        el.id = `pin-el-${idx}`;
+        el.innerHTML = `<div class="pin-label">${p.label}</div><div class="pin-dot" style="background:${p.color};"></div>`;
+        el.onclick = () => map.flyTo({ center: [p.lon, p.lat], zoom: p.zoom, duration: 2400 });
+        container.appendChild(el);
+      });
     }
 
     function updateTrackerCounts() {
@@ -1244,21 +925,21 @@
 
       document.getElementById('tracker-note').innerText = !simState.horsesInAmericas
         ? "🐎 Horses extinct in Americas until 1500 CE Columbian Exchange."
-        : "Click any glowing map pin to fly straight there.";
+        : "Click any pin to fly there. Right-drag to tilt 3D mountains.";
     }
 
     window.toggleTracker = function(type) {
       simState.trackers[type] = !simState.trackers[type];
       document.getElementById(`tog-${type}`).classList.toggle('active', simState.trackers[type]);
-      rebuildMapPins();
+      rebuildPinData();
     };
 
     spawnTribeOnMap(simState.tribes[0]);
     populateHistoricalWildlife();
-    rebuildMapPins();
+    rebuildPinData();
 
     // =========================================================
-    // 8. VISUAL INTERACTIVE TASKS & CHRONOS LEAP
+    // 7. VISUAL INTERACTIVE TASKS & CHRONOS LEAP
     // =========================================================
     function showToast(msg, duration = 5000) {
       const t = document.getElementById('chronicle-toast');
@@ -1279,10 +960,6 @@
       if (simState.fireLit) return;
       simState.fireLit = true;
       simState.tribes.forEach(t => t.fireLit = true);
-      campVisuals.forEach(cv => {
-        cv.fireGlow.visible = true;
-        cv.smoke.forEach(s => s.visible = true);
-      });
       document.getElementById('task-fire').classList.add('done');
       document.getElementById('task-fire-txt').innerText = "Fire Ignited ✓";
       showToast("🔥 <strong>Controlled Fire Sparked!</strong> Your clan gathers around the glowing hearth.");
@@ -1309,7 +986,6 @@
       if (simState.huntsDone >= simState.huntsNeeded) {
         document.getElementById('task-hunt').classList.add('done');
         document.getElementById('task-hunt-txt').innerText = "Food Secured ✓";
-        campVisuals.forEach(cv => cv.rack.visible = true);
         tryBuildShelter();
       }
       checkEraComplete();
@@ -1318,14 +994,13 @@
     function tryBuildShelter() {
       if (simState.fireLit && simState.huntsDone >= simState.huntsNeeded && !simState.shelterBuilt) {
         simState.shelterBuilt = true;
-        campVisuals.forEach(cv => {
-          [{ dx: -0.55, dy: -0.35 }, { dx: 0.55, dy: -0.3 }, { dx: -0.3, dy: 0.52 }].forEach(o => {
-            const h = new PIXI.Sprite(hutTex);
-            h.anchor.set(0.5, 0.85); h.scale.set(0.0072);
-            h.x = cv.center.x + o.dx; h.y = cv.center.y + o.dy;
-            cv.hutGroup.addChild(h);
-          });
-          for (let i = 0; i < 4; i++) addHumanToTribe(cv.tribe, cv.center, "Hunter");
+        simState.tribes.forEach(tr => {
+          tr.hutsCoords = [
+            { lon: tr.lon - 0.0025, lat: tr.lat + 0.0018 },
+            { lon: tr.lon + 0.0028, lat: tr.lat + 0.0015 },
+            { lon: tr.lon - 0.0014, lat: tr.lat - 0.0022 }
+          ];
+          for (let i = 0; i < 4; i++) addHumanToTribe(tr, "Hunter");
         });
         document.getElementById('task-clan').classList.add('done');
         document.getElementById('task-clan-txt').innerText = "Shelters Built ✓";
@@ -1353,43 +1028,48 @@
       document.getElementById('year-label').innerText = era.label;
       document.getElementById('pop-label').innerText = era.pop;
 
+      function addEraTribe(name, lat, lon) {
+        const t = {
+          name, lat, lon, fireLit: true,
+          hutsCoords: [
+            { lon: lon - 0.0025, lat: lat + 0.0018 },
+            { lon: lon + 0.0028, lat: lat + 0.0015 }
+          ]
+        };
+        simState.tribes.push(t);
+        spawnTribeOnMap(t);
+      }
+
       if (era.year === 70000) {
-        [
-          { name: "Levantine Corridor", lat: 31.5, lon: 35.5, fireLit: true, huts: 3 },
-          { name: "Indus Coast", lat: 24.5, lon: 68.0, fireLit: true, huts: 3 }
-        ].forEach(t => { simState.tribes.push(t); spawnTribeOnMap(t); });
-        flyTo(latLonToWorld(31.5, 35.5).x, latLonToWorld(31.5, 35.5).y, 180, 2200);
+        addEraTribe("Levantine Corridor", 31.8, 35.5);
+        addEraTribe("Indus Coast", 24.8, 67.8);
+        map.flyTo({ center: [35.5, 31.8], zoom: 13.5, duration: 2400 });
         showToast("⚡ <strong>70,000 BCE: Out of Africa!</strong> Tribes cross into the Levant and coastal India.");
       } else if (era.year === 12000) {
-        [
-          { name: "Danube Hunters", lat: 47.0, lon: 16.0, fireLit: true, huts: 3 },
-          { name: "Yellow River", lat: 35.0, lon: 112.0, fireLit: true, huts: 3 },
-          { name: "Clovis Plains", lat: 39.0, lon: -102.0, fireLit: true, huts: 3 }
-        ].forEach(t => { simState.tribes.push(t); spawnTribeOnMap(t); });
-        flyTo(latLonToWorld(39.0, -102.0).x, latLonToWorld(39.0, -102.0).y, 140, 2200);
+        addEraTribe("Danube Hunters", 47.5, 16.5);
+        addEraTribe("Yellow River", 34.8, 113.5);
+        addEraTribe("Clovis Plains", 39.2, -102.5);
+        map.flyTo({ center: [-102.5, 39.2], zoom: 12.5, duration: 2400 });
         showToast("⚡ <strong>12,000 BCE: Ice Age Crossings!</strong> Tribes reach Europe, East Asia, and the Americas.");
       } else if (era.year === 4000) {
         simState.horsesInAmericas = false;
         simState.mammothsAlive = false;
-        const mesopotamia = { name: "Sumer (Mesopotamia)", lat: 31.3, lon: 45.6, fireLit: true, huts: 3 };
-        simState.tribes.push(mesopotamia); spawnTribeOnMap(mesopotamia);
-        flyTo(latLonToWorld(31.3, 45.6).x, latLonToWorld(31.3, 45.6).y, 180, 2200);
+        addEraTribe("Sumer (Mesopotamia)", 31.3, 45.6);
+        map.flyTo({ center: [45.6, 31.3], zoom: 13.8, duration: 2400 });
         showToast("⚡ <strong>4,000 BCE: Mesopotamia!</strong> Mammoths go extinct, and horses vanish from the Americas!");
       } else if (era.year === 1500) {
         simState.horsesInAmericas = true;
-        const mesoamerica = { name: "Tenochtitlan", lat: 19.4, lon: -99.1, fireLit: true, huts: 3 };
-        simState.tribes.push(mesoamerica); spawnTribeOnMap(mesoamerica);
-        flyTo(latLonToWorld(32.0, -98.0).x, latLonToWorld(32.0, -98.0).y, 100, 2200);
+        addEraTribe("Tenochtitlan", 19.43, -99.13);
+        map.flyTo({ center: [-98.0, 32.0], zoom: 6.5, duration: 2400 });
         showToast("⚡ <strong>1500 CE: The Columbian Exchange!</strong> Horses return across the Atlantic to the Americas!");
       }
 
-      invalidateAllTiles();
       populateHistoricalWildlife();
-      rebuildMapPins();
+      rebuildPinData();
     });
 
     // =========================================================
-    // 9. REAL AI INTERVENTION BACKEND CONNECTION (/api/turn)
+    // 8. REAL AI INTERVENTION BACKEND CONNECTION (/api/turn)
     // =========================================================
     document.getElementById('btn-intervene').onclick = () => {
       document.getElementById('intervention-modal').style.display = 'flex';
@@ -1425,31 +1105,39 @@
 
         const text = await res.text();
         let data;
-        try {
-          data = JSON.parse(text);
-        } catch (e) {
-          showToast(`⚠️ Server Error (${res.status}): Make sure <code>api/turn.js</code> is pushed to GitHub.`, 7000);
+        try { data = JSON.parse(text); }
+        catch (e) {
+          showToast(`⚠️ Server Error (${res.status}): Make sure <code>api/turn.js</code> is pushed.`, 7000);
           return;
         }
 
-        if (data.error) {
-          showToast(`⚠️ ${data.error}`, 7000);
-          return;
-        }
+        if (data.error) { showToast(`⚠️ ${data.error}`, 7000); return; }
 
         if (data.commands && Array.isArray(data.commands)) {
           data.commands.forEach(cmd => {
             if (cmd.type === "unlock_horses_americas") simState.horsesInAmericas = true;
             if (cmd.type === "save_mammoths") simState.mammothsAlive = true;
-            if (cmd.type === "green_sahara") { simState.saharaGreen = true; invalidateAllTiles(); }
+            if (cmd.type === "green_sahara") {
+              simState.saharaGreen = true;
+              renderMercatorBiomeCanvas();
+              if (map.getSource('biome-earth')) {
+                map.getSource('biome-earth').updateImage({
+                  url: biomeCanvas.toDataURL(),
+                  coordinates: [[-180, 85.051129], [180, 85.051129], [180, -85.051129], [-180, -85.051129]]
+                });
+              }
+            }
             if (cmd.type === "spawn_tribe" && cmd.lat != null && cmd.lon != null) {
-              const t = { name: cmd.name || "New Colony", lat: cmd.lat, lon: cmd.lon, fireLit: true, huts: 3 };
+              const t = {
+                name: cmd.name || "New Colony", lat: cmd.lat, lon: cmd.lon, fireLit: true,
+                hutsCoords: [{ lon: cmd.lon - 0.002, lat: cmd.lat + 0.0015 }]
+              };
               simState.tribes.push(t);
               spawnTribeOnMap(t);
             }
           });
           populateHistoricalWildlife();
-          rebuildMapPins();
+          rebuildPinData();
         }
 
         showToast(`✨ <strong>Chronicle:</strong> ${data.narrative || "Timeline altered."}`, 7000);
@@ -1464,91 +1152,26 @@
     };
 
     // =========================================================
-    // 10. CAMERA, CLAMPING & LOGARITHMIC FLIGHT
+    // 9. UI BUTTONS & SPEED CONTROLS
     // =========================================================
-    function getMinZoom() {
-      return Math.max(window.innerWidth / MAP_WIDTH, window.innerHeight / MAP_HEIGHT);
-    }
-
-    function clampCamera() {
-      const sw = window.innerWidth, sh = window.innerHeight;
-      const s = world.scale.x, mw = MAP_WIDTH * s, mh = MAP_HEIGHT * s;
-      if (mw > sw) world.x = Math.min(0, Math.max(sw - mw, world.x));
-      else world.x = (sw - mw) / 2;
-      if (mh > sh) world.y = Math.min(0, Math.max(sh - mh, world.y));
-      else world.y = (sh - mh) / 2;
-    }
-
-    world.scale.set(getMinZoom());
-    clampCamera();
-
-    let fly = { active: false, startTime: 0, duration: 2200, startZoom: 1, endZoom: 1, sx: 0, sy: 0, ex: 0, ey: 0 };
-    function flyTo(wx, wy, targetZoom, duration = 2200) {
-      const cz = world.scale.x;
-      fly = {
-        active: true, startTime: performance.now(), duration,
-        startZoom: cz, endZoom: targetZoom,
-        sx: (window.innerWidth / 2 - world.x) / cz,
-        sy: (window.innerHeight / 2 - world.y) / cz,
-        ex: wx, ey: wy
-      };
-    }
-
-    let isDragging = false, dragStart = { x: 0, y: 0 }, worldStart = { x: 0, y: 0 };
-    canvasEl.addEventListener('pointerdown', e => {
-      if (!gameStarted) return;
-      isDragging = true; fly.active = false;
-      canvasEl.setPointerCapture(e.pointerId);
-      dragStart = { x: e.clientX, y: e.clientY };
-      worldStart = { x: world.x, y: world.y };
-    });
-    canvasEl.addEventListener('pointermove', e => {
-      if (!isDragging || !gameStarted) return;
-      world.x = worldStart.x + (e.clientX - dragStart.x);
-      world.y = worldStart.y + (e.clientY - dragStart.y);
-      clampCamera();
-    });
-    function endDrag(e) {
-      if (!isDragging) return;
-      isDragging = false;
-      try { canvasEl.releasePointerCapture(e.pointerId); } catch(err) {}
-    }
-    canvasEl.addEventListener('pointerup', endDrag);
-    canvasEl.addEventListener('pointercancel', endDrag);
-
-    canvasEl.addEventListener('wheel', e => {
-      if (!gameStarted) return;
-      e.preventDefault(); fly.active = false;
-      const factor = e.deltaY < 0 ? 1.24 : 0.81;
-      const newScale = Math.min(Math.max(world.scale.x * factor, getMinZoom()), MAX_ZOOM);
-      const mx = e.clientX, my = e.clientY;
-      const wx = (mx - world.x) / world.scale.x, wy = (my - world.y) / world.scale.y;
-      world.scale.set(newScale);
-      world.x = mx - wx * newScale;
-      world.y = my - wy * newScale;
-      clampCamera();
-    }, { passive: false });
-
-    window.addEventListener('resize', () => {
-      const mz = getMinZoom();
-      if (world.scale.x < mz) world.scale.set(mz);
-      clampCamera();
-    });
-
     document.getElementById('start-btn').addEventListener('click', () => {
-      if (!texturesReady) return;
+      if (!mapReady) return;
       gameStarted = true;
       const m = document.getElementById('intro-modal');
       m.style.opacity = '0';
       setTimeout(() => m.style.display = 'none', 600);
-      const startPos = latLonToWorld(simState.tribes[0].lat, simState.tribes[0].lon);
-      flyTo(startPos.x, startPos.y, 260.0, 2600);
+      map.flyTo({ center: [simState.tribes[0].lon, simState.tribes[0].lat], zoom: 14.6, duration: 3000 });
     });
 
-    document.getElementById('btn-orbit').onclick = () => flyTo(MAP_WIDTH / 2, MAP_HEIGHT / 2, getMinZoom(), 1600);
-    document.getElementById('btn-camp').onclick = () => {
-      const c = latLonToWorld(simState.tribes[0].lat, simState.tribes[0].lon);
-      flyTo(c.x, c.y, 260.0, 1800);
+    document.getElementById('btn-orbit').onclick = () => map.flyTo({ center: [20, 14], zoom: 1.6, pitch: 0, duration: 1800 });
+    document.getElementById('btn-camp').onclick = () => map.flyTo({ center: [simState.tribes[0].lon, simState.tribes[0].lat], zoom: 14.6, duration: 2000 });
+
+    document.getElementById('btn-pixel').onclick = function() {
+      pixelMode = !pixelMode;
+      document.getElementById('map').classList.toggle('pixel-mode', pixelMode);
+      map.setPixelRatio(pixelMode ? PIXEL_RATIO : (window.devicePixelRatio || 1));
+      this.classList.toggle('active', pixelMode);
+      this.innerText = pixelMode ? "👾 8-Bit: ON" : "👾 8-Bit: OFF";
     };
 
     let timeSpeed = 1;
@@ -1559,193 +1182,343 @@
     [0, 1, 5, 20].forEach(k => document.getElementById(`sp-${k}`).onclick = () => setSpeed(k));
 
     // =========================================================
-    // 11. MAIN SIMULATION LOOP (5-MIN DAY/NIGHT + QUADTREE)
+    // 10. 2D SPRITE RENDERER & 5-MINUTE DAY/NIGHT LOOP
     // =========================================================
-    let lastTime = performance.now();
-    let ticker = 0;
+    const sprCanvas = document.getElementById('sprite-canvas');
+    const sCtx = sprCanvas.getContext('2d');
 
-    app.ticker.add(() => {
-      const now = performance.now();
+    function resizeSpriteCanvas() {
+      sprCanvas.width = window.innerWidth;
+      sprCanvas.height = window.innerHeight;
+      sCtx.imageSmoothingEnabled = false;
+    }
+    window.addEventListener('resize', resizeSpriteCanvas);
+    resizeSpriteCanvas();
+
+    function hash2(x, y) {
+      let n = Math.sin((x % 512) * 127.1 + (y % 512) * 311.7) * 43758.5453123;
+      return n - Math.floor(n);
+    }
+
+    let lastTime = performance.now();
+    let frameCount = 0;
+
+    function renderLoop(now) {
       const dt = Math.min(0.1, (now - lastTime) / 1000);
       lastTime = now;
-      frameCounter++;
-      ticker += dt * 4;
+      frameCount++;
 
+      // 5-Minute Real-Time Day/Night Cycle
       if (gameStarted && timeSpeed > 0) {
         simState.dayTime = (simState.dayTime + (dt * timeSpeed) / 300.0) % 1.0;
-        if (Math.floor(frameCounter) % 300 === 0 && !simState.isCE && simState.year > 1000) {
+        if (frameCount % 300 === 0 && !simState.isCE && simState.year > 1000) {
           simState.year -= timeSpeed;
           document.getElementById('year-label').innerText = simState.year.toLocaleString() + ' BCE';
         }
       }
 
+      // Clock & Lighting Calculations
       const hours24 = Math.floor(simState.dayTime * 24);
       const mins = Math.floor((simState.dayTime * 24 - hours24) * 60);
-      const ampm = hours24 >= 12 ? 'PM' : 'AM';
       const h12 = (hours24 % 12) || 12;
       const minStr = mins < 10 ? '0' + mins : mins;
+      const ampm = hours24 >= 12 ? 'PM' : 'AM';
 
-      let period = "Night", icon = "🌙", overlayColor = 0x04081c, overlayAlpha = 0.68;
+      let period = "Night", icon = "🌙", nightAlpha = 0.70, tint = "4, 10, 34";
       if (simState.dayTime >= 0.22 && simState.dayTime < 0.32) {
         period = "Dawn"; icon = "🌅";
-        overlayColor = 0x7c2d12; overlayAlpha = 0.35 * (1 - (simState.dayTime - 0.22) / 0.10);
+        nightAlpha = 0.36 * (1 - (simState.dayTime - 0.22) / 0.10);
+        tint = "120, 45, 18";
       } else if (simState.dayTime >= 0.32 && simState.dayTime < 0.70) {
-        period = "Daylight"; icon = "☀️"; overlayAlpha = 0.0;
+        period = "Daylight"; icon = "☀️";
+        nightAlpha = 0;
       } else if (simState.dayTime >= 0.70 && simState.dayTime < 0.80) {
         period = "Dusk"; icon = "🌇";
-        overlayColor = 0x9a3412; overlayAlpha = 0.42 * ((simState.dayTime - 0.70) / 0.10);
-      } else {
-        period = "Night"; icon = "🌙"; overlayColor = 0x040921; overlayAlpha = 0.68;
+        nightAlpha = 0.42 * ((simState.dayTime - 0.70) / 0.10);
+        tint = "140, 48, 18";
       }
-
       const isNight = simState.dayTime < 0.25 || simState.dayTime > 0.75;
       document.getElementById('clock-icon').innerText = icon;
       document.getElementById('clock-text').innerText = `${h12}:${minStr} ${ampm} • ${period}`;
 
-      dayNightOverlay.clear();
-      if (overlayAlpha > 0.01) {
-        dayNightOverlay.beginFill(overlayColor, overlayAlpha);
-        dayNightOverlay.drawRect(0, 0, window.innerWidth, window.innerHeight);
-        dayNightOverlay.endFill();
-      }
+      const zoom = map.getZoom();
+      document.getElementById('zoom-text').innerText = zoom.toFixed(1);
 
-      if (fly.active) {
-        let t = Math.min(1, (now - fly.startTime) / fly.duration);
-        const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-        const curZ = Math.exp(Math.log(fly.startZoom) + (Math.log(fly.endZoom) - Math.log(fly.startZoom)) * ease);
-        const fx = fly.sx + (fly.ex - fly.sx) * ease, fy = fly.sy + (fly.ey - fly.sy) * ease;
-        world.scale.set(curZ);
-        world.x = window.innerWidth / 2 - fx * curZ;
-        world.y = window.innerHeight / 2 - fy * curZ;
-        clampCamera();
-        if (t >= 1) fly.active = false;
-      }
-
-      const zoom = world.scale.x;
-      const curLOD = updateQuadtree(zoom);
-      document.getElementById('zoom-text').innerText = zoom.toFixed(1) + 'x';
-      document.getElementById('lod-text').innerText = `LOD ${curLOD}`;
-
-      updateDenseEcosystem(zoom);
-      const entityAlpha = Math.max(0, Math.min(1, (zoom - 85) / 100));
-      campLayer.alpha = entityAlpha;
-      entitiesLayer.alpha = entityAlpha;
-      nightWorldGlowLayer.alpha = entityAlpha * (isNight ? 0.95 : 0.25);
-      campLayer.visible = entityAlpha > 0.01;
-      entitiesLayer.visible = entityAlpha > 0.01;
-
-      const pinFade = 1 - Math.max(0, Math.min(1, (zoom - 100) / 80));
-      pinLayer.visible = pinFade > 0.02;
-      pinLayer.alpha = pinFade;
-      if (pinLayer.visible) {
-        const invScale = 1 / zoom;
-        activePins.forEach(p => p.scale.set(invScale));
-      }
-
-      if (campLayer.visible) {
-        campVisuals.forEach(cv => {
-          cv.hearth.clear();
-          cv.hearth.beginFill(0x475569);
-          cv.hearth.drawCircle(cv.center.x, cv.center.y, 0.055);
-          if (cv.tribe.fireLit) {
-            cv.hearth.beginFill(0xf97316);
-            const fSize = 0.032 + Math.sin(ticker * 4) * 0.008;
-            cv.hearth.drawRect(cv.center.x - fSize/2, cv.center.y - fSize, fSize, fSize * 1.4);
-            cv.hearth.beginFill(0xfef08a);
-            cv.hearth.drawRect(cv.center.x - 0.01, cv.center.y - 0.02, 0.02, 0.02);
-            cv.fireGlow.scale.set(0.028 + Math.sin(ticker * 5) * 0.002);
-
-            cv.smoke.forEach(p => {
-              p.life -= 0.008; p.y -= 0.003;
-              p.x += Math.sin(ticker + p.life * 5) * 0.0006;
-              p.alpha = p.life * 0.6;
-              if (p.life <= 0) {
-                p.x = cv.center.x + (Math.random() - 0.5) * 0.02;
-                p.y = cv.center.y - 0.02;
-                p.life = 1.0;
-              }
-            });
-          } else {
-            cv.hearth.beginFill(0x78350f);
-            cv.hearth.drawRect(cv.center.x - 0.025, cv.center.y - 0.01, 0.05, 0.02);
-          }
-          cv.hearth.endFill();
+      // Update Map Pins
+      const pinFade = Math.max(0, Math.min(1, 1 - (zoom - 11.5) / 1.8));
+      const pinsDiv = document.getElementById('pins-layer');
+      pinsDiv.style.opacity = pinFade;
+      pinsDiv.style.display = pinFade <= 0.02 ? 'none' : 'block';
+      if (pinFade > 0.02) {
+        currentPinsData.forEach((p, idx) => {
+          const el = document.getElementById(`pin-el-${idx}`);
+          if (!el) return;
+          const pt = map.project([p.lon, p.lat]);
+          el.style.left = `${pt.x}px`;
+          el.style.top = `${pt.y}px`;
         });
+      }
 
-        const spd = timeSpeed === 0 ? 0 : Math.min(0.015, 0.0025 * Math.sqrt(timeSpeed));
-        humanAgents.forEach(h => {
-          if (spd === 0) return;
+      // Clear Sprite Canvas
+      sCtx.clearRect(0, 0, sprCanvas.width, sprCanvas.height);
+      sCtx.imageSmoothingEnabled = false;
 
-          if (h.huntingTarget) {
-            if (!h.huntingTarget.alive) { h.huntingTarget = null; }
-            else {
-              const dx = h.huntingTarget.sprite.x - h.sprite.x, dy = h.huntingTarget.sprite.y - h.sprite.y;
-              const dist = Math.hypot(dx, dy);
-              if (dist < 0.06) {
-                h.huntingTarget.alive = false;
-                h.huntingTarget.sprite.visible = false;
-                h.huntingTarget = null;
-                completeSingleHunt();
-              } else {
-                h.sprite.x += (dx / dist) * (spd * 1.8);
-                h.sprite.y += (dy / dist) * (spd * 1.8);
-                h.sprite.scale.x = dx < 0 ? -0.0044 : 0.0044;
-                h.anim += 0.35;
-                h.sprite.texture = Math.floor(h.anim) % 2 === 0 ? texHunter1 : texHunter2;
-                return;
-              }
-            }
-          }
+      // Draw Night Darkness + Cut Out Warm Campfire Glow Holes!
+      if (nightAlpha > 0.01) {
+        sCtx.fillStyle = `rgba(${tint}, ${nightAlpha})`;
+        sCtx.fillRect(0, 0, sprCanvas.width, sprCanvas.height);
 
-          if (h.wait > 0) { h.wait--; return; }
-          const dx = h.targetX - h.sprite.x, dy = h.targetY - h.sprite.y, dist = Math.hypot(dx, dy);
-          if (dist < 0.025) {
-            h.wait = isNight ? (120 + Math.random() * 180) : (40 + Math.random() * 100);
-            const ang = Math.random() * Math.PI * 2;
-            const maxRad = isNight ? (h.role === "Hunter" ? 0.35 : 0.18) : (h.role === "Firekeeper" ? 0.15 : 0.95);
-            const rad = 0.08 + Math.random() * maxRad;
-            h.targetX = h.home.x + Math.cos(ang) * rad;
-            h.targetY = h.home.y + Math.sin(ang) * rad;
-          } else {
-            h.sprite.x += (dx / dist) * spd; h.sprite.y += (dy / dist) * spd;
-            h.sprite.scale.x = dx < 0 ? -0.0044 : 0.0044;
-            if (h.role === "Hunter") {
-              h.anim += 0.22;
-              h.sprite.texture = Math.floor(h.anim) % 2 === 0 ? texHunter1 : texHunter2;
-            }
-          }
-        });
-
-        const aniSpd = spd * 0.7;
-        if (aniSpd > 0) {
-          gazelles.forEach(g => {
-            if (!g.alive) return;
-            if (g.wait > 0) { g.wait--; return; }
-            const dx = g.tx - g.sprite.x, dy = g.ty - g.sprite.y, d = Math.hypot(dx, dy);
-            if (d < 0.04) {
-              g.wait = 80 + Math.random() * 160;
-              g.tx = g.home.x + (Math.random() - 0.5) * 0.8; g.ty = g.home.y + (Math.random() - 0.5) * 0.8;
-            } else {
-              g.sprite.x += (dx / d) * aniSpd; g.sprite.y += (dy / d) * aniSpd;
-              g.sprite.scale.x = dx < 0 ? -0.0042 : 0.0042;
-            }
+        if (simState.fireLit && zoom >= 11.5) {
+          const glowRadius = Math.max(40, (zoom - 10) * 28);
+          sCtx.save();
+          sCtx.globalCompositeOperation = 'destination-out';
+          simState.tribes.forEach(tr => {
+            if (!tr.fireLit) return;
+            const pt = map.project([tr.lon, tr.lat]);
+            const grad = sCtx.createRadialGradient(pt.x, pt.y, glowRadius * 0.1, pt.x, pt.y, glowRadius);
+            grad.addColorStop(0, 'rgba(0,0,0,1)');
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            sCtx.fillStyle = grad;
+            sCtx.beginPath();
+            sCtx.arc(pt.x, pt.y, glowRadius, 0, Math.PI * 2);
+            sCtx.fill();
           });
+          sCtx.restore();
 
-          wildAnimals.forEach(w => {
-            if (w.wait > 0) { w.wait--; return; }
-            const dx = w.tx - w.sprite.x, dy = w.ty - w.sprite.y, d = Math.hypot(dx, dy);
-            if (d < 0.05) {
-              w.wait = 90 + Math.random() * 180;
-              w.tx = w.home.x + (Math.random() - 0.5) * 1.8; w.ty = w.home.y + (Math.random() - 0.5) * 1.8;
-            } else {
-              w.sprite.x += (dx / d) * aniSpd; w.sprite.y += (dy / d) * aniSpd;
-              const bs = Math.abs(w.sprite.scale.x);
-              w.sprite.scale.x = dx < 0 ? -bs : bs;
-            }
+          // Warm orange firelight tint
+          simState.tribes.forEach(tr => {
+            if (!tr.fireLit) return;
+            const pt = map.project([tr.lon, tr.lat]);
+            const grad = sCtx.createRadialGradient(pt.x, pt.y, 2, pt.x, pt.y, glowRadius * 0.85);
+            grad.addColorStop(0, 'rgba(255, 140, 35, 0.32)');
+            grad.addColorStop(1, 'rgba(255, 140, 35, 0)');
+            sCtx.fillStyle = grad;
+            sCtx.beginPath();
+            sCtx.arc(pt.x, pt.y, glowRadius * 0.85, 0, Math.PI * 2);
+            sCtx.fill();
           });
         }
       }
-    });
+
+      // Ground-Level 8-Bit Entities & Foreground Trees (Fade in smoothly z12.2 -> z13.8)
+      const detailAlpha = Math.max(0, Math.min(1, (zoom - 12.0) / 1.6));
+      if (detailAlpha > 0.02 && mapReady) {
+        sCtx.save();
+        sCtx.globalAlpha = detailAlpha;
+        const sprScale = Math.max(0.9, Math.min(2.8, (zoom - 11.5) * 0.52));
+
+        // 1. Deterministic Foreground Biome Trees inside current Viewport (NEVER in oceans or Mt. Everest!)
+        const bounds = map.getBounds();
+        const STEP = 0.0022;
+        const minLon = Math.floor(bounds.getWest() / STEP) * STEP;
+        const maxLon = Math.ceil(bounds.getEast() / STEP) * STEP;
+        const minLat = Math.floor(bounds.getSouth() / STEP) * STEP;
+        const maxLat = Math.ceil(bounds.getNorth() / STEP) * STEP;
+
+        let drawnTrees = 0;
+        for (let la = minLat; la <= maxLat && drawnTrees < 350; la += STEP) {
+          for (let lo = minLon; lo <= maxLon && drawnTrees < 350; lo += STEP) {
+            const cx = Math.round(lo / STEP), cy = Math.round(la / STEP);
+            const h = hash2(cx, cy);
+            const tLon = lo + (h - 0.5) * STEP * 0.8;
+            const tLat = la + (hash2(cx + 11, cy + 7) - 0.5) * STEP * 0.8;
+
+            // Keep tribe clearings open
+            let nearCamp = false;
+            for (const tr of simState.tribes) {
+              if (Math.hypot(tLon - tr.lon, tLat - tr.lat) < 0.0045) { nearCamp = true; break; }
+            }
+            if (nearCamp) continue;
+
+            const bio = sampleBiomeAtLatLon(tLon, tLat);
+            if (bio.isDesert || bio.isSnow || bio.greenness < 8) continue;
+            if (h > (bio.greenness > 34 ? 0.65 : 0.30)) continue;
+
+            // Skip water & peaks > 3600m!
+            if (isPointInWater(tLon, tLat)) continue;
+            const elev = getElevMeters(tLon, tLat);
+            if (elev !== null && (elev <= 1 || elev > 3600)) continue;
+
+            const pt = map.project([tLon, tLat]);
+            const isTrop = Math.abs(tLat) < 25;
+            const isBor = Math.abs(tLat) > 52;
+            const tImg = isTrop ? sprAcacia : (isBor ? sprPine : (h > 0.25 ? sprOak : sprPine));
+
+            const w = tImg.width * sprScale * 1.15;
+            const hPx = tImg.height * sprScale * 1.15;
+            sCtx.drawImage(tImg, Math.round(pt.x - w/2), Math.round(pt.y - hPx), Math.round(w), Math.round(hPx));
+            drawnTrees++;
+          }
+        }
+
+        // 2. Camps, Huts, Drying Rack & Hearth Fire
+        simState.tribes.forEach(tr => {
+          const cpt = map.project([tr.lon, tr.lat]);
+
+          // Dirt clearing oval
+          sCtx.fillStyle = 'rgba(130, 92, 54, 0.55)';
+          sCtx.beginPath();
+          sCtx.ellipse(cpt.x, cpt.y, 45 * sprScale, 32 * sprScale, 0, 0, Math.PI * 2);
+          sCtx.fill();
+
+          // Huts
+          if (tr.hutsCoords) {
+            tr.hutsCoords.forEach(hc => {
+              const hpt = map.project([hc.lon, hc.lat]);
+              const hw = sprHut.width * sprScale, hh = sprHut.height * sprScale;
+              sCtx.drawImage(sprHut, Math.round(hpt.x - hw/2), Math.round(hpt.y - hh), Math.round(hw), Math.round(hh));
+            });
+          }
+
+          // Drying Rack (after 3 hunts)
+          if (simState.huntsDone >= simState.huntsNeeded) {
+            const rw = sprRack.width * sprScale, rh = sprRack.height * sprScale;
+            sCtx.drawImage(sprRack, Math.round(cpt.x + 18 * sprScale), Math.round(cpt.y + 8 * sprScale - rh), Math.round(rw), Math.round(rh));
+          }
+
+          // Stone Hearth & Animated Fire
+          sCtx.fillStyle = '#475569';
+          sCtx.beginPath();
+          sCtx.arc(cpt.x, cpt.y, 5 * sprScale, 0, Math.PI * 2);
+          sCtx.fill();
+
+          if (tr.fireLit) {
+            const flk = Math.sin(now * 0.015) * 1.5;
+            sCtx.fillStyle = '#f97316';
+            sCtx.fillRect(Math.round(cpt.x - 3 * sprScale), Math.round(cpt.y - (6 + flk) * sprScale), Math.round(6 * sprScale), Math.round((6 + flk) * sprScale));
+            sCtx.fillStyle = '#fef08a';
+            sCtx.fillRect(Math.round(cpt.x - 1.5 * sprScale), Math.round(cpt.y - 3 * sprScale), Math.round(3 * sprScale), Math.round(3 * sprScale));
+          } else {
+            sCtx.fillStyle = '#78350f';
+            sCtx.fillRect(Math.round(cpt.x - 3 * sprScale), Math.round(cpt.y - 1 * sprScale), Math.round(6 * sprScale), Math.round(2 * sprScale));
+          }
+        });
+
+        // Smoke Particles
+        if (simState.fireLit) {
+          smokeParticles.forEach(p => {
+            p.life -= 0.012;
+            p.dy -= 0.35 * sprScale;
+            p.dx += Math.sin(now * 0.004 + p.life * 6) * 0.15;
+            if (p.life <= 0) { p.life = 1.0; p.dx = (Math.random() - 0.5) * 4; p.dy = -4 * sprScale; }
+            const pt = map.project([p.tribe.lon, p.tribe.lat]);
+            sCtx.fillStyle = `rgba(203, 213, 225, ${p.life * 0.55})`;
+            const s = Math.max(2, 3 * sprScale);
+            sCtx.fillRect(Math.round(pt.x + p.dx), Math.round(pt.y + p.dy), s, s);
+          });
+        }
+
+        // 3. Draw & Update Elevation-Aware Humans & Animals
+        const spd = timeSpeed === 0 ? 0 : Math.min(0.00018, 0.00003 * Math.sqrt(timeSpeed));
+
+        function drawSpriteAgent(img, lon, lat, dir, scaleMult = 1.0) {
+          const pt = map.project([lon, lat]);
+          if (pt.x < -50 || pt.x > sprCanvas.width + 50 || pt.y < -50 || pt.y > sprCanvas.height + 50) return;
+          const w = img.width * sprScale * scaleMult;
+          const h = img.height * sprScale * scaleMult;
+
+          // Soft shadow
+          sCtx.fillStyle = 'rgba(0,0,0,0.35)';
+          sCtx.beginPath();
+          sCtx.ellipse(pt.x, pt.y, w * 0.35, h * 0.12, 0, 0, Math.PI * 2);
+          sCtx.fill();
+
+          sCtx.save();
+          sCtx.translate(Math.round(pt.x), Math.round(pt.y));
+          if (dir < 0) sCtx.scale(-1, 1);
+          sCtx.drawImage(img, Math.round(-w / 2), Math.round(-h), Math.round(w), Math.round(h));
+          sCtx.restore();
+        }
+
+        // Humans
+        humanAgents.forEach(h => {
+          if (spd > 0) {
+            if (h.huntingTarget) {
+              if (!h.huntingTarget.alive) h.huntingTarget = null;
+              else {
+                const dx = h.huntingTarget.lon - h.lon, dy = h.huntingTarget.lat - h.lat;
+                const d = Math.hypot(dx, dy);
+                if (d < 0.00035) {
+                  h.huntingTarget.alive = false;
+                  h.huntingTarget = null;
+                  completeSingleHunt();
+                } else {
+                  h.lon += (dx / d) * (spd * 2.0);
+                  h.lat += (dy / d) * (spd * 2.0);
+                  h.dir = dx < 0 ? -1 : 1;
+                  h.anim += 0.3;
+                }
+              }
+            } else if (h.wait > 0) {
+              h.wait--;
+            } else {
+              const dx = h.tLon - h.lon, dy = h.tLat - h.lat, d = Math.hypot(dx, dy);
+              if (d < 0.00015) {
+                h.wait = isNight ? (100 + Math.random() * 150) : (40 + Math.random() * 90);
+                const maxDeg = isNight ? (h.role === "Hunter" ? 0.0014 : 0.0008) : (h.role === "Firekeeper" ? 0.0007 : 0.0042);
+                const next = pickSafeStep(h.lon, h.lat, h.tribe.lon, h.tribe.lat, maxDeg);
+                h.tLon = next.lon; h.tLat = next.lat;
+              } else {
+                h.lon += (dx / d) * spd; h.lat += (dy / d) * spd;
+                h.dir = dx < 0 ? -1 : 1;
+                h.anim += 0.22;
+              }
+            }
+          }
+          const img = h.role === "Firekeeper" ? sprElder : (h.role === "Gatherer" ? sprGatherer : (Math.floor(h.anim) % 2 === 0 ? sprHunter1 : sprHunter2));
+          drawSpriteAgent(img, h.lon, h.lat, h.dir, 0.9);
+        });
+
+        // Gazelles & Historical Wildlife
+        const aniSpd = spd * 0.75;
+        gazelles.forEach(g => {
+          if (!g.alive) return;
+          if (aniSpd > 0) {
+            if (g.wait > 0) g.wait--;
+            else {
+              const dx = g.tLon - g.lon, dy = g.tLat - g.lat, d = Math.hypot(dx, dy);
+              if (d < 0.0002) {
+                g.wait = 70 + Math.random() * 140;
+                const next = pickSafeStep(g.lon, g.lat, g.homeLon, g.homeLat, 0.004);
+                g.tLon = next.lon; g.tLat = next.lat;
+              } else {
+                g.lon += (dx / d) * aniSpd; g.lat += (dy / d) * aniSpd;
+                g.dir = dx < 0 ? -1 : 1;
+              }
+            }
+          }
+          drawSpriteAgent(sprGazelle, g.lon, g.lat, g.dir, 0.85);
+        });
+
+        wildAnimals.forEach(w => {
+          if (aniSpd > 0) {
+            if (w.wait > 0) w.wait--;
+            else {
+              const dx = w.tLon - w.lon, dy = w.tLat - w.lat, d = Math.hypot(dx, dy);
+              if (d < 0.0002) {
+                w.wait = 80 + Math.random() * 160;
+                const next = pickSafeStep(w.lon, w.lat, w.homeLon, w.homeLat, 0.012);
+                w.tLon = next.lon; w.tLat = next.lat;
+              } else {
+                w.lon += (dx / d) * aniSpd; w.lat += (dy / d) * aniSpd;
+                w.dir = dx < 0 ? -1 : 1;
+              }
+            }
+          }
+          const img = w.type === "bears" ? (w.variant === "polar" ? sprBearPolar : sprBearBrown)
+                    : w.type === "horses" ? sprHorse
+                    : w.type === "mammoths" ? sprMammoth
+                    : sprLion;
+          drawSpriteAgent(img, w.lon, w.lat, w.dir, w.type === "mammoths" ? 1.2 : 0.95);
+        });
+
+        sCtx.restore();
+      }
+
+      requestAnimationFrame(renderLoop);
+    }
+
+    requestAnimationFrame(renderLoop);
   </script>
 </body>
 </html>
